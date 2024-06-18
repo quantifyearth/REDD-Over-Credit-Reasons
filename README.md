@@ -19,9 +19,11 @@ Analyses 1 and 2 were carried out as one group, and analyses 3 and 4 as another.
 
 -   Scripts called in the above R notebooks are contained within `/scripts`
 
+-   Data is stored in an external repository (see 'Inputs')
+
 ### Inputs
 
-**The inputs for the analysis will be made available at a later date, via a link to an online repository.**
+The below inputs are available to download at the following repository: https://www.cl.cam.ac.uk/~avsm2/consensus-data-20240618.zip
 
 `analysis_1_2.Rmd` uses the following inputs:
 
