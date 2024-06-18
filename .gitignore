@@ -1,0 +1,15 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.RDataTmp
+/figures/
+/outputs/
+/R/*.html
+/R/*knit*
+*.shp
+*.dbf
+*.prj
+*.shx
+*.xlsx
+/data/
