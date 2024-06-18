@@ -1,6 +1,6 @@
-# Swinfield et al (2024): Code for analysis
+# Independent statistical approaches address overcrediting problems in REDD+: Code for analysis
 
-This repository contains the code used for the analyses in *Independent statistical approaches address overcrediting problems in REDD+* (Swinfield et al, 2024). The code will generate all of the figures and statistical outputs included in both the main text and the supplementary information.
+This repository contains the code used for the analyses in *Independent statistical approaches address overcrediting problems in REDD+* (Swinfield et al). The code will generate all of the figures and statistical outputs included in both the main text and the supplementary information.
 
 The analyses detailed in the results can be divided into 4 sections:
 
