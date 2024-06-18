@@ -23,7 +23,7 @@ Analyses 1 and 2 were carried out as one group, and analyses 3 and 4 as another.
 
 ### Inputs
 
-The below inputs are available to download at the following repository: https://www.cl.cam.ac.uk/~avsm2/consensus-data-20240618.zip
+The below inputs are available to download at the following link: https://www.cl.cam.ac.uk/~avsm2/consensus-data-20240618.zip
 
 `analysis_1_2.Rmd` uses the following inputs:
 
