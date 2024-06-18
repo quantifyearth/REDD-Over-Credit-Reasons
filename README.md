@@ -19,13 +19,9 @@ Analyses 1 and 2 were carried out as one group, and analyses 3 and 4 as another.
 
 -   Scripts called in the above R notebooks are contained within `/scripts`
 
--   All input data are contained within `/data`
-
--   All outputs are written to `/outputs`
-
--   All figures are written to `/figures`
-
 ### Inputs
+
+**The inputs for the analysis will be made available at a later date, via a link to an online repository.**
 
 `analysis_1_2.Rmd` uses the following inputs:
 
