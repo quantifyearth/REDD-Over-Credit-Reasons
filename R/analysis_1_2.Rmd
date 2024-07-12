@@ -1,6 +1,5 @@
 ---
-title: "Counterfactual Additionality Comparisons"
-author: "Tom Swinfield & Jamie Hartup"
+title: "Code for Analysis 1 & 2"
 date: 
 output: 
   html_document: default
@@ -50,11 +49,9 @@ knitr::opts_chunk$set(
 library(tidyverse)
 library(dplyr)
 library(ggplot2)
-library(readxl)
 library(ggrepel)
 library(cowplot)
 library(magrittr)
-library(arrow)
 library(RColorBrewer)
 library(weights)
 library(GGally)
@@ -64,7 +61,7 @@ theme_set(theme_classic())
 
 my_colors<-colorRampPalette(brewer.pal(9,'BuGn'))(10)[c(4,6,8,10)]
 
-data_path<-'../data'
+data_path<-'../data/analysis_1_2'
 output_path<-'../outputs'
 fig_path<-'../figures'
 
@@ -146,7 +143,7 @@ ag_24 <- read.csv(file.path(data_path, "AG_2024.csv")) %>%
   select(ID = vcs_id, Avd_def = DD_ha) %>%
   mutate(ID = as.numeric(str_replace(ID, 'PL', ''))) %>%
   mutate(Avd_def = -Avd_def)
-pact_v2 <- read_parquet(file.path(data_path, "project_summaries.parquet")) %>%
+pact_v2 <- read.csv(file.path(data_path, "project_summaries.csv")) %>%
   filter(ID != '1325') %>%
   filter(cv <0.5) # filter out those projects with a large coefficient of variance (>50% of mean estimte) 
                   # across the bootstraps indicating non convergence
@@ -359,7 +356,7 @@ cf_vcs_avd_comp_mean<-cf_vcs_comp_def %>%
             cf_Aadj_max = max(Aadj),
             VERRA  = VERRA[1])
 
-write_parquet(cf_vcs_avd_comp_mean, file.path(output_path, 'certified_statistical_AddRatio.parquet'))
+write.csv(cf_vcs_avd_comp_mean, file.path(output_path, 'certified_statistical_AddRatio.csv'),row.names=F)
 
 ```
 
