@@ -6,10 +6,9 @@
 /figures/
 /outputs/
 /R/*.html
-/R/*knit*
-*.shp
-*.dbf
-*.prj
-*.shx
-*.xlsx
+/R/*files
 /data/
+*.geojson
+manage_files.R
+/scripts/std_mean_diff_OLD.R
+data.zip

@@ -1,11 +1,8 @@
 
-make_summary_fig <- function(all_data,path_to_project_sf,path_to_ref_sf,output_path,
+make_summary_fig <- function(all_data,project_sf,ref_sf,output_path,
                            country,project_no){
 
 # PLOT 1/3 MAP
-
-project_area <- read_sf(path_to_project_sf)
-reference_area <- read_sf(path_to_ref_sf)
 
 # get cf points from existing df
 
@@ -22,8 +19,8 @@ map_plot <- ggplot(data=cf_points,aes(x=lon,y=lat))+
   geom_map(data=country_map,map=country_map,aes(x=long,y=lat,map_id=region),
            colour='black',fill='grey93',linewidth=1.2)+
   geom_point(aes(col='Counterfactual'),alpha=0.4,size=0.4)+
-  geom_sf(data=reference_area,inherit.aes=FALSE,aes(fill='Reference'),colour=NA,alpha=0.7)+
-  geom_sf(data=project_area,inherit.aes=FALSE,aes(fill='Project'),colour=NA,alpha=0.9)+
+  geom_sf(data=ref_sf,inherit.aes=FALSE,aes(fill='Reference'),colour=NA,alpha=0.7)+
+  geom_sf(data=project_sf,inherit.aes=FALSE,aes(fill='Project'),colour=NA,alpha=0.9)+
   scale_colour_manual(name='Legend',labels=c('Counterfactual'),values=c('blue'))+
   scale_fill_manual(name='Legend',labels=c('Project','Reference'),values=c('grey25','red'))+
   coord_sf()+

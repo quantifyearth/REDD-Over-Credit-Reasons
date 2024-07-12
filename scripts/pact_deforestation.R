@@ -1,6 +1,10 @@
 
 compare_def_rates <- function(project_no,t0,tend,jrc_period_length,all_data){
   
+  # filter out reference data if present
+  
+  all_data <- all_data %>% filter(type!='Reference')
+  
   # count number of 1s at project start
   
   t0_index <- grep(paste0('luc_',t0),colnames(all_data))
