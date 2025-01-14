@@ -145,6 +145,10 @@ ag_24 <- read.csv(file.path(data_path, "AG_2024.csv")) %>%
   mutate(Avd_def = -Avd_def)
 pact_v2 <- read.csv(file.path(data_path, "project_summaries.csv")) %>%
   filter(ID != '1325') %>%
+  rename(cv = cov_avoided_disturbance_prop,
+         Start = start,
+         End = end,
+         ID = id) %>% 
   filter(cv <0.5) # filter out those projects with a large coefficient of variance (>50% of mean estimte) 
                   # across the bootstraps indicating non convergence
 # Certified assessments
@@ -351,9 +355,17 @@ cf_vcs_avd_comp_mean<-cf_vcs_comp_def %>%
             cf_avd_max = max(cf_avd),
             cf_avd_sd = sd(cf_avd),
             cf_avd_se = cf_avd_sd / sqrt(n),
+            cf_avd_ci = 1.96*cf_avd_se, # calculate CI
+            cf_avd_ci_min = cf_avd_mean - cf_avd_ci, # CI min
+            cf_avd_ci_max = cf_avd_mean + cf_avd_ci, # CI max
             cf_Aadj_mean = mean(Aadj),
             cf_Aadj_min = min(Aadj),
             cf_Aadj_max = max(Aadj),
+            cf_Aadj_sd = sd(Aadj), # add SD
+            cf_Aadj_se = cf_Aadj_sd / sqrt(n), # add SE
+            cf_Aadj_ci = 1.96*cf_Aadj_se, # calculate CI
+            cf_Aadj_ci_min = cf_Aadj_mean - cf_Aadj_ci, # CI min
+            cf_Aadj_ci_max = cf_Aadj_mean + cf_Aadj_ci, # CI max
             VERRA  = VERRA[1])
 
 write.csv(cf_vcs_avd_comp_mean, file.path(output_path, 'certified_statistical_AddRatio.csv'),row.names=F)
@@ -383,8 +395,8 @@ cf_vcs_avd_comp_mean %>%
   geom_hline(yintercept = 0, col = "black", linetype = 1, linewidth = 0.5)+
   # geom_smooth(method = 'lm', formula = y~x,  se = FALSE, col = 'black', linewidth = 0.75)+
   geom_point(size = 3, alpha = 0.8, aes(color = as.factor(n)))+
-  geom_errorbar(aes(xmin = cf_avd_min, 
-                    xmax = cf_avd_max, color = as.factor(n))) +
+  geom_errorbar(aes(xmin = cf_avd_ci_min, 
+                    xmax = cf_avd_ci_max, color = as.factor(n))) +
   # geom_errorbar(aes(xmin = cf_avd_mean - cf_avd_se, xmax = cf_avd_mean + cf_avd_se, color = as.factor(n))) +
   # scale_x_continuous(trans='log10') +
   scale_x_continuous(limits = c(-1000, 3500)) +
@@ -411,6 +423,35 @@ ggsave(file.path(fig_path, 'Fig1a.png'), bg = 'white',
        height = 4,# 5
        units = 'in')
 ```
+# Version of the above figure with points coloured by country.
+
+```{r}
+
+all_projects$ID <- as.factor(all_projects$ID)
+
+df_for_plot <- cf_vcs_avd_comp_mean %>%
+  mutate(ID = as.factor(ID)) %>% 
+  inner_join(all_projects, by = "ID")
+
+df_for_plot %>% 
+  ggplot(aes(y = VERRA, x = cf_avd_mean, colour = country)) +
+  geom_abline(intercept = 0, slope = 1, col = "black", linetype = 2, linewidth = 0.75)+
+  geom_line(data = new.dat, col = "black", linetype = 2, linewidth = 0.75)+
+  geom_vline(xintercept = 0, col = "black", linetype = 1, linewidth = 0.5)+
+  geom_hline(yintercept = 0, col = "black", linetype = 1, linewidth = 0.5)+
+  geom_point(size = 3, alpha = 0.8)+
+  scale_x_continuous(limits = c(-1000, 3500)) +
+  scale_y_continuous(trans='log10', limits = c(50, 10000)) +
+  ylab("Self-reported avoided deforestation (ha/yr)") + xlab("Independent assessment of avoided deforestation (ha/yr)")+
+  theme(axis.line = element_blank(),
+        axis.text = element_text(size = 12),
+        legend.position="right",
+        legend.spacing = unit(0, "cm")
+        )
+
+```
+
+
 
 ```{r}
 # VERRA avoideded deforestation against matched counterfactual avoided deforestation 
@@ -445,19 +486,20 @@ length(cf_vcs_avd_comp_mean$cf_Aadj_mean)
 cf_vcs_avd_comp_mean %>%
   mutate(Aadj_mean =  cf_avd_mean / VERRA) %>% 
   # mutate(Aadj_mean = ifelse(Aadj_mean <0, Inf, Aadj_mean)) %>%
-  rename(Aadj = Aadj_mean) %>%
-  filter(VERRA>0) %>%
-  filter(!is.infinite(Aadj)) %>%
+  # rename(Aadj = Aadj_mean) %>%
+  # filter(VERRA>0) %>%
+  # filter(!is.infinite(Aadj)) %>%
   # filter(n>=2) %>%
-  ggplot(aes(x = VERRA, y = Aadj, label = ID)) +
+  ggplot(aes(x = VERRA, y = Aadj_mean, label = ID)) +
   geom_vline(xintercept = 0, col = "black", linetype = 1, linewidth = 0.5)+
   geom_hline(yintercept = 0, col = "black", linetype = 1, linewidth = 0.5)+
   geom_hline(yintercept = 1, col = "black", linetype = 2, linewidth = 0.75)+
-  # geom_smooth(method = 'lm', formula = y~x)+
   geom_hline(yintercept = Aadj_mean, linewidth = 0.75, col = 'grey')+
   geom_hline(yintercept = Aadj_w_mean, linewidth = 0.75, col = 'grey', linetype = 2)+
+  # geom_smooth(method = 'lm', formula = y~x)+
+  #geom_hline(yintercept = cf_Aadj_mean, linewidth = 0.75, col = 'grey')+
   geom_point(size = 3, alpha = 0.8, aes(color = as.factor(n)))+
-  geom_errorbar(aes(ymin = cf_Aadj_min, ymax = cf_Aadj_max, color = as.factor(n))) +
+  geom_errorbar(aes(ymin = cf_Aadj_ci_min, ymax = cf_Aadj_ci_max, color = as.factor(n))) +
   # geom_text_repel(aes(color = as.factor(n)), size = 3, max.overlaps = 20)+
   scale_color_manual(values = my_colors,
                     labels = c("1", "2","3","4")) +
@@ -489,16 +531,14 @@ ggsave(file.path(fig_path, 'Fig1b.png'), bg = 'white',
 
 ```{r}
 
-
-
 cf_vcs_avd_comp_mean %>%
   mutate(Aadj_mean =  cf_avd_mean / VERRA) %>% 
   # mutate(Aadj_mean = ifelse(Aadj_mean <0, Inf, Aadj_mean)) %>%
-  rename(Aadj = Aadj_mean) %>%
-  filter(VERRA>0) %>%
-  filter(!is.infinite(Aadj)) %>%
+  # rename(Aadj = Aadj_mean) %>%
+  # filter(VERRA>0) %>%
+  # filter(!is.infinite(Aadj)) %>%
   # filter(n>=2) %>%
-  ggplot(aes(x = VERRA, y = Aadj, label = ID)) +
+  ggplot(aes(x = VERRA, y = Aadj_mean, label = ID)) +
   geom_vline(xintercept = 0, col = "black", linetype = 1, linewidth = 0.5)+
   geom_hline(yintercept = 0, col = "black", linetype = 1, linewidth = 0.5)+
   geom_hline(yintercept = 1, col = "black", linetype = 2, linewidth = 0.75)+
@@ -506,7 +546,7 @@ cf_vcs_avd_comp_mean %>%
   geom_hline(yintercept = Aadj_mean, linewidth = 0.75, col = 'grey')+
   geom_hline(yintercept = Aadj_w_mean, linewidth = 0.75, col = 'grey', linetype = 2)+
   geom_point(size = 3, alpha = 0.8, aes(color = as.factor(n)))+
-  geom_errorbar(aes(ymin = cf_Aadj_min, ymax = cf_Aadj_max, color = as.factor(n))) +
+  geom_errorbar(aes(ymin = cf_Aadj_ci_min, ymax = cf_Aadj_ci_max, color = as.factor(n))) +
   geom_text_repel(aes(color = as.factor(n)), size = 3, max.overlaps = 20)+
   scale_color_manual(values = my_colors,
                     labels = c("1", "2","3","4")) +
@@ -673,7 +713,7 @@ joint_subset %>%
   geom_point(data = vcs_subset %>% filter(cf_source == 'VERRA'), aes(y = avd_def_yr), shape = 16, size = 3, alpha = 1, position = position_nudge(x = - 0.2)) +
 
   scale_shape_manual(values = c(16,17), labels = c("vcs_official", "VERRA")) +    
-  scale_color_manual(values = c('red', 'blue'), labels = c("Certified", "Statistical")) +    
+  scale_color_manual(values = c('red', 'blue'), labels = c("Certified", "QEM")) +    
   ylab('Avoided deforestation (ha/year)') +
   xlab('Project')
 
@@ -685,6 +725,62 @@ ggsave(file.path(fig_path,'Variation in VCS vs counterfactual avoided deforestat
        )
 
 ```
+##### ABBY EDITS ######
+
+
+```{r}
+
+joint_subset %>%
+  filter(!cf_source %in% c('SC','official')) %>%
+  mutate(ID = as.factor(ID)) %>%
+  mutate(type = fct_relevel(type, 'VCS')) %>%
+  # mutate(ID = fct_reorder(ID, cf_mean)) %>%
+  ggplot(aes(x = ID, color = type)) +
+  geom_hline(yintercept = 0) +
+  # geom_boxplot(outlier.colour = NA) +
+  geom_boxplot(mapping=aes(y=avd_def_yr),position = position_dodge(width = 0.8)) +
+  geom_point(aes(y = avd_def_yr), position = position_jitterdodge(0.6), shape = 1, alpha = 0.8, size = 3) +
+#  geom_point(data = vcs_subset %>% filter(cf_source == 'VERRA'), aes(y = avd_def_yr, shape = cf_source), size = 3, alpha = 1, position = position_nudge(x = - 0.2)) +
+  geom_point(data = vcs_subset %>% filter(cf_source == 'VERRA'), aes(y = avd_def_yr), shape = 16, size = 3, alpha = 1, position = position_nudge(x = - 0.2)) +
+
+  scale_shape_manual(values = c(16,17), labels = c("vcs_official", "VERRA")) +    
+  scale_color_manual(values = c('red', 'blue'), labels = c("Certified", "QEM")) +    
+  ylab('Avoided deforestation (ha/year)') +
+  xlab('Project')
+
+```
+
+```{r}
+
+# Making pooled error
+
+pooled_error <- joint_subset %>% 
+  mutate(type='Pooled')
+
+joint_subset %>%
+  bind_rows(pooled_error) %>% 
+  filter(!cf_source %in% c('SC','official')) %>%
+  mutate(ID = as.factor(ID)) %>%
+  mutate(type = fct_relevel(type, 'Pooled', 'VCS')) %>%
+  # mutate(ID = fct_reorder(ID, cf_mean)) %>%
+  ggplot(aes(x = ID, color = type)) +
+  geom_hline(yintercept = 0) +
+  # geom_boxplot(outlier.colour = NA) +
+  geom_boxplot(mapping=aes(y=avd_def_yr),position = position_dodge(width = 0.8)) +
+  #geom_point(aes(y = avd_def_yr), position = position_jitterdodge(0.6), shape = 1, alpha = 0.8, size = 3) +
+#  geom_point(data = vcs_subset %>% filter(cf_source == 'VERRA'), aes(y = avd_def_yr, shape = cf_source), size = 3, alpha = 1, position = position_nudge(x = - 0.2)) +
+  geom_point(data = vcs_subset %>% filter(cf_source == 'VERRA'), aes(y = avd_def_yr), shape = 16, size = 3, alpha = 1, position = position_nudge(x = - 0.2)) +
+  scale_shape_manual(values = c(16,17), labels = c("vcs_official", "VERRA")) +    
+  scale_color_manual(values = c('magenta4', 'red', 'blue'), labels = c("Pooled", "VCS", "QEM")) +    
+  ylab('Avoided deforestation (ha/year)') +
+  xlab('Project')
+
+
+```
+
+
+
+
 
 Assessing the ratio of the average standard errors from certified vs statistical approaches
 

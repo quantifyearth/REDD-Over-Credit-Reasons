@@ -11,8 +11,6 @@ cf_points <- data.frame(lon=cf$lng,lat=cf$lat)
 
 # get map data as polygon
 
-world <- fortify(map("worldHires", fill=TRUE, plot=FALSE))
-
 country_map <- world %>% filter(region==country)
 
 map_plot <- ggplot(data=cf_points,aes(x=lon,y=lat))+
@@ -155,6 +153,44 @@ summary_plot <- (map_plot | (continuous / pca_plot)) +
 ggsave(filename=paste0(output_path,'/',project_no,'_summary_fig.png'),plot=summary_plot,dpi=300,width=14,height=12)
 
 }
+
+# Additional map zoom panel, if necessary
+
+make_zoom_panel <- function(all_data,project_sf,ref_sf,output_path,
+                               country,project_no){
+    
+    # get cf points from existing df
+    
+    cf <- all_data %>% filter(type=='Counterfactual')
+    cf_points <- data.frame(lon=cf$lng,lat=cf$lat)
+    
+    # get map data as polygon
+    
+    country_map <- world %>% filter(region==country)
+    
+    # plot
+    
+    zoom_panel <- ggplot(data=cf_points,aes(x=lon,y=lat))+
+      geom_map(data=country_map,map=country_map,aes(x=long,y=lat,map_id=region),
+               colour='black',fill='grey93',linewidth=1.2)+
+      geom_point(aes(col='Counterfactual'),alpha=0.4,size=0.4)+
+      geom_sf(data=ref_sf,inherit.aes=FALSE,aes(fill='Reference'),colour=NA,alpha=0.7)+
+      geom_sf(data=project_sf,inherit.aes=FALSE,aes(fill='Project'),colour=NA,alpha=0.9)+
+      scale_colour_manual(name='Legend',labels=c('Counterfactual'),values=c('blue'))+
+      scale_fill_manual(name='Legend',labels=c('Project','Reference'),values=c('grey25','red'))+
+      coord_sf(ylim=c(st_bbox(project_sf)$ymin,st_bbox(project_sf)$ymax),
+               xlim=c(st_bbox(project_sf)$xmin,st_bbox(project_sf)$xmax))+
+      annotation_scale(text_cex = 1.7)+
+      theme_void()+
+      theme(legend.title = element_blank(),
+            text=element_text(size=14),
+            legend.position='none')
+
+    ggsave(filename=paste0(output_path,'/',project_no,'_zoom.png'),plot=zoom_panel,dpi=300,width=3.5,height=2.5)
+
+}
+
+
 
 
 
