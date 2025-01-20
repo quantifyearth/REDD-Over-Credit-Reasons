@@ -733,6 +733,8 @@ pca_polys %>%
 
 # Analysis 4
 
+*This section can be run independently of section 3 after running the setup section.*
+
 We start by reading in the data on the self-reported deforestation rate in both the project and the baseline scenario. These data were extracted from project design documents and project monitoring documents. They are given here as rates in hectares per year. The method for calculating the evaluation period and annual rate is detailed in S6.
 
 We have 22 projects at this stage, i.e. the number of projects for which we were able to find information on the baseline deforestation rate in hectares per year.
@@ -796,41 +798,7 @@ for(p in 1:length(analysis_4_projects)){
 
 ```
 
-Extracting proportion of forest at t0:
-
-```{r extract_prop_und}
-
-# prop_und <- data.frame(matrix(nrow=nrow(self_report_ha),ncol=2))
-# colnames(prop_und) <- c('project_no','prop_und_proj')
-# 
-# for(p in 1:length(analysis_4_projects)){
-# 
-#   # define params
-#   
-#   project_no <- analysis_4_projects[p]
-#   all_data <- read.csv(project_info$path_to_tidy_data[project_info$project_no == project_no])
-#   t0 <- project_info$start_year[project_info$project_no == project_no]
-#   
-#   # get proportion of 1s at t0
-#   
-#   t0_index <- grep(paste0('luc_',t0),colnames(all_data))
-#   data_filtered <- all_data[all_data[,t0_index]==1,]
-#   
-#   proj_total <- all_data %>% filter(type=='Project') %>% nrow()
-#   proj_1s <- data_filtered %>% filter(type=='Project') %>% nrow()
-#   prop_proj <- proj_1s/proj_total
-#   
-#   prop_und[p,1] <- project_no
-#   prop_und[p,2] <- prop_proj
-# 
-# }
-
-
-
-```
-
 Compound deforestation calculations. We start by extracting the proportion of undisturbed forest at each year of the project, for each project.
-
 
 ```{r}
 
@@ -962,6 +930,7 @@ for(p in 1:nrow(pact_def_rates)){
 }
 
 ```
+
 We now average the PACT and self-reported rates across the years, obtaining two values for each project (project and baseline) in each case.
 
 ```{r}
