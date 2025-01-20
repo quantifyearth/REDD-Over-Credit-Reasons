@@ -35,7 +35,7 @@ Code for producing the data used as inputs to our paper is available:
 
 -   [Guizar-Coutino et al. (2024](https://github.com/guizar/redd-sens))
 
-We're present avoided deforestation in hectares per year
+We present avoided deforestation in hectares per year
 
 ```{r setup, include=FALSE, echo = FALSE}
 # clean and load packages
@@ -143,14 +143,17 @@ ag_24 <- read.csv(file.path(data_path, "AG_2024.csv")) %>%
   select(ID = vcs_id, Avd_def = DD_ha) %>%
   mutate(ID = as.numeric(str_replace(ID, 'PL', ''))) %>%
   mutate(Avd_def = -Avd_def)
+
+# PACT assessments
 pact_v2 <- read.csv(file.path(data_path, "project_summaries.csv")) %>%
-  filter(ID != '1325') %>%
+  filter(id != '1325') %>%
   rename(cv = cov_avoided_disturbance_prop,
          Start = start,
          End = end,
          ID = id) %>% 
   filter(cv <0.5) # filter out those projects with a large coefficient of variance (>50% of mean estimte) 
                   # across the bootstraps indicating non convergence
+
 # Certified assessments
 vcs <- as.data.frame(read.csv(file.path(data_path,'certified.csv')))
 
@@ -378,14 +381,15 @@ The dashed line shows a 1:1 relationship between X and Y. Projects above the lin
 
 ```{r}
 
-plot(cf_vcs_avd_comp_mean$VERRA, cf_vcs_avd_comp_mean$cf_avd_mean)
+#plot(cf_vcs_avd_comp_mean$VERRA, cf_vcs_avd_comp_mean$cf_avd_mean)
 
-cor.test(cf_vcs_avd_comp_mean$VERRA, cf_vcs_avd_comp_mean$cf_avd_mean)
+#cor.test(cf_vcs_avd_comp_mean$VERRA, cf_vcs_avd_comp_mean$cf_avd_mean)
 
-new.dat = data.frame(cf_avd_mean = seq(from = min(cf_vcs_avd_comp_mean$cf_avd_min), to = max(cf_vcs_avd_comp_mean$cf_avd_max, by = 1))) %>%
+new.dat = data.frame(cf_avd_mean = seq(from = min(cf_vcs_avd_comp_mean$cf_avd_min), 
+                                       to = max(cf_vcs_avd_comp_mean$cf_avd_max, by = 1))) %>%
   mutate(VERRA = cf_avd_mean)
 
-cf_vcs_avd_comp_mean %>%
+f1a <- cf_vcs_avd_comp_mean %>%
   # filter(n>=2) %>%
   ggplot(aes(y = VERRA, x = cf_avd_mean)) +
   # geom_abline(intercept = 0, slope = 1, col = "black", linetype = 2, linewidth = 0.75)+
@@ -405,7 +409,7 @@ cf_vcs_avd_comp_mean %>%
                     labels = c("1", "2","3","4")) +
   # geom_errorbar(aes(xmin = cf_add_mean - cf_add_se, xmax = cf_add_mean + cf_add_se, color = as.factor(n))) +
   # geom_text_repel(aes(label = ID, color = as.factor(n)), size = 3, nudge_x = 1, nudge_y = 1, max.overlaps = 20)+
-  ylab("Self-reported avoided deforestation (ha/yr)") + xlab("Independent assessment of avoided deforestation (ha/yr)")+
+  ylab("Certified avoided deforestation (ha/yr)") + xlab("Quasi-experimental assessment of avoided deforestation (ha/yr)")+
   # theme_classic() +
   # xlim(0, 3100) + # so that the xaxis labels fit in properly
   theme(axis.line = element_blank(),
@@ -419,11 +423,11 @@ cf_vcs_avd_comp_mean %>%
                              override.aes = list(shape = 16, size = 3, alpha = 0.5)))
 
 ggsave(file.path(fig_path, 'Fig1a.png'), bg = 'white',
-       width = 6, # 7
+       width = 7, # 7
        height = 4,# 5
        units = 'in')
 ```
-# Version of the above figure with points coloured by country.
+Version of the above figure with points coloured by country.
 
 ```{r}
 
@@ -451,6 +455,38 @@ df_for_plot %>%
 
 ```
 
+Version of the above figure with points coloured by method.
+
+```{r}
+
+# read in method info from before
+
+method_info <- read.csv(file.path(output_path, '/combined.csv')) %>% 
+  mutate(ID = as.factor(ID))
+
+# add VERRA info
+  
+df_for_method_plot <- method_info %>% 
+  left_join(cf_vcs_comp_def %>% select(ID,VERRA), by = 'ID')
+
+# plotting
+
+df_for_method_plot %>% 
+  ggplot(aes(y = VERRA, x = avd_def_yr, colour = method)) +
+  geom_abline(intercept = 0, slope = 1, col = "black", linetype = 2, linewidth = 0.75)+
+  geom_vline(xintercept = 0, col = "black", linetype = 1, linewidth = 0.5)+
+  geom_hline(yintercept = 0, col = "black", linetype = 1, linewidth = 0.5)+
+  geom_point(size = 3, alpha = 0.3)+
+  scale_x_continuous(limits = c(-1000, 3500)) +
+  scale_y_continuous(trans='log10', limits = c(50, 10000)) +
+  ylab("Self-reported avoided deforestation (ha/yr)") + xlab("West et al assessment of avoided deforestation (ha/yr)")+
+  theme(axis.line = element_blank(),
+        axis.text = element_text(size = 12),
+        legend.position="right",
+        legend.spacing = unit(0, "cm")
+        )
+
+```
 
 
 ```{r}
@@ -483,7 +519,7 @@ length(cf_vcs_avd_comp_mean$cf_Aadj_mean)
 
 
 
-cf_vcs_avd_comp_mean %>%
+f1b <- cf_vcs_avd_comp_mean %>%
   mutate(Aadj_mean =  cf_avd_mean / VERRA) %>% 
   # mutate(Aadj_mean = ifelse(Aadj_mean <0, Inf, Aadj_mean)) %>%
   # rename(Aadj = Aadj_mean) %>%
@@ -503,7 +539,7 @@ cf_vcs_avd_comp_mean %>%
   # geom_text_repel(aes(color = as.factor(n)), size = 3, max.overlaps = 20)+
   scale_color_manual(values = my_colors,
                     labels = c("1", "2","3","4")) +
-  xlab("Self-reported avoided deforestation (ha/yr)") + ylab("Additionality ratio")+
+  xlab("Certified avoided deforestation (ha/yr)") + ylab("Additionality ratio")+
   # scale_y_continuous(trans='log10') +
   scale_x_continuous(trans='log10') +
   theme(axis.line = element_blank(),
@@ -518,13 +554,30 @@ cf_vcs_avd_comp_mean %>%
 
 
 ggsave(file.path(fig_path, 'Fig1b.png'), bg = 'white',
-       width = 5, # 7
-       height = 4,# 5
+       width = 7, # 7
+       height = 5,# 5
        units = 'in')
 
 
 
 ```
+
+Saving combined fig 1a/b.
+
+```{r}
+
+fig_1 <- f1a + f1b +
+  plot_layout(ncol=1)+
+  plot_annotation(tag_levels='a') &
+  theme(plot.tag = element_text(face='bold'))
+
+fig_1
+
+ggsave(filename=file.path(fig_path,'Fig_1.png'),dpi=300,width=7,height=10)
+
+
+```
+
 
 ## Fig 1b. Additionality ratio vs statistical assessements of avoided deforestation by project labelled by projct ID. 
 
@@ -550,7 +603,7 @@ cf_vcs_avd_comp_mean %>%
   geom_text_repel(aes(color = as.factor(n)), size = 3, max.overlaps = 20)+
   scale_color_manual(values = my_colors,
                     labels = c("1", "2","3","4")) +
-  xlab("Self-reported avoided deforestation (ha/yr)") + ylab("Additionality ratio")+
+  xlab("Certified avoided deforestation (ha/yr)") + ylab("Additionality ratio")+
   # scale_y_continuous(trans='log10') +
   scale_x_continuous(trans='log10') +
   theme(axis.line = element_blank(),
@@ -563,8 +616,8 @@ cf_vcs_avd_comp_mean %>%
                              override.aes = list(shape = 16, size = 3, alpha = 0.5)))
 
 ggsave(file.path(fig_path, 'Fig1b_IDlabels.png'), bg = 'white',
-       width = 5, # 7
-       height = 4,# 5
+       width = 7, # 7
+       height = 5,# 5
        units = 'in')
 
 ```
@@ -574,7 +627,9 @@ Summary stats reported
 
 print('Achieved avoided deforestation')
 cf_vcs_avd_comp_mean %>% filter(cf_Aadj_mean >0)
-df %>% filter(ID %in% (cf_vcs_avd_comp_mean %>% filter(cf_Aadj_mean >1) %>% pull(ID)))
+#df %>% filter(ID %in% (cf_vcs_avd_comp_mean %>% filter(cf_Aadj_mean >1) %>% pull(ID))) %>% nrow() # aew edits - don't understand this
+no_avd <- cf_vcs_avd_comp_mean %>% filter(cf_Aadj_mean >0) %>% nrow()
+no_avd/nrow(cf_vcs_avd_comp_mean)
 
 print('Undercrediting')
 cf_vcs_avd_comp_mean %>% filter(cf_Aadj_mean >1)
@@ -608,6 +663,7 @@ tw_avd_def_yr <- tw_avd_def %>%
   select(-observed) %>%
   mutate(ID = as.numeric(as.character(ID)))
 
+tw_avd_def_yr
 
 tw_summary <- tw_avd_def_yr %>%
   group_by(ID) %>%
@@ -725,7 +781,7 @@ ggsave(file.path(fig_path,'Variation in VCS vs counterfactual avoided deforestat
        )
 
 ```
-##### ABBY EDITS ######
+##### AEW EDITS ######
 
 
 ```{r}
@@ -750,37 +806,206 @@ joint_subset %>%
 
 ```
 
+Scaling all the certified methods by the QEM:
+
 ```{r}
 
-# Making pooled error
+joint_subset_center_scale <- joint_subset %>% 
+  group_by(ID) %>%
+  mutate(
+    mean_cf = mean(avd_def_yr[type == "cf"], na.rm = TRUE),
+    sd_cf = sd(avd_def_yr[type == "cf"], na.rm = TRUE),
+    scaled_value = (avd_def_yr - mean_cf) / sd_cf
+  ) %>%
+  ungroup()
 
-pooled_error <- joint_subset %>% 
-  mutate(type='Pooled')
+joint_subset_center_scale
 
-joint_subset %>%
-  bind_rows(pooled_error) %>% 
-  filter(!cf_source %in% c('SC','official')) %>%
-  mutate(ID = as.factor(ID)) %>%
-  mutate(type = fct_relevel(type, 'Pooled', 'VCS')) %>%
-  # mutate(ID = fct_reorder(ID, cf_mean)) %>%
-  ggplot(aes(x = ID, color = type)) +
-  geom_hline(yintercept = 0) +
-  # geom_boxplot(outlier.colour = NA) +
-  geom_boxplot(mapping=aes(y=avd_def_yr),position = position_dodge(width = 0.8)) +
-  #geom_point(aes(y = avd_def_yr), position = position_jitterdodge(0.6), shape = 1, alpha = 0.8, size = 3) +
-#  geom_point(data = vcs_subset %>% filter(cf_source == 'VERRA'), aes(y = avd_def_yr, shape = cf_source), size = 3, alpha = 1, position = position_nudge(x = - 0.2)) +
-  geom_point(data = vcs_subset %>% filter(cf_source == 'VERRA'), aes(y = avd_def_yr), shape = 16, size = 3, alpha = 1, position = position_nudge(x = - 0.2)) +
-  scale_shape_manual(values = c(16,17), labels = c("vcs_official", "VERRA")) +    
-  scale_color_manual(values = c('magenta4', 'red', 'blue'), labels = c("Pooled", "VCS", "QEM")) +    
-  ylab('Avoided deforestation (ha/year)') +
-  xlab('Project')
+```
 
+Also need to center and scale the certified value
+
+```{r}
+
+# extract values from above
+
+mean_sd_table <- joint_subset_center_scale %>%
+  filter(type == "cf") %>%
+  select(ID, mean_cf, sd_cf) %>%
+  mutate(ID=as.factor(ID)) %>% 
+  distinct()
+
+vcs_subset_center_scale <- vcs_subset %>%
+  mutate(ID=as.factor(ID)) %>%
+  left_join(mean_sd_table, by = "ID") %>%
+  mutate(
+    scaled_value = if_else(
+      cf_source == "VERRA",
+      (avd_def_yr - mean_cf) / sd_cf,
+      NA_real_
+    )
+  )
+
+vcs_subset_center_scale
 
 ```
 
 
+Plotting
+
+```{r}
+
+joint_subset_center_scale %>%
+  filter(!cf_source %in% c('SC','official')) %>%
+  mutate(ID = as.factor(ID)) %>%
+  mutate(type = fct_relevel(type, 'VCS')) %>%
+  # mutate(ID = fct_reorder(ID, cf_mean)) %>%
+  ggplot(aes(x = ID, color = type)) +
+  geom_hline(yintercept = 0) +
+  # geom_boxplot(outlier.colour = NA) +
+  #geom_boxplot(mapping=aes(y=scaled_value),position = position_dodge(width = 0.8)) +
+  geom_point(aes(y = scaled_value), position = position_jitterdodge(0.6), alpha = 0.3, size = 3) +
+#  geom_point(data = vcs_subset %>% filter(cf_source == 'VERRA'), aes(y = avd_def_yr, shape = cf_source), size = 3, alpha = 1, position = position_nudge(x = - 0.2)) +
+  #scale_shape_manual(values = c(16,17), labels = c("vcs_official", "VERRA")) +
+  scale_color_manual(values = c('red', 'blue'), labels = c("Certified", "QEM")) +
+  #geom_point(data = vcs_subset_center_scale %>% filter(cf_source == 'VERRA'), aes(y = scaled_value), shape = 16, size = 3, alpha = 1, position = position_nudge(x = - 0.2)) +
+geom_segment(data = vcs_subset_center_scale %>% filter(cf_source == 'VERRA'), 
+             aes(x = as.numeric(ID) - 0.2, xend = as.numeric(ID) + 0.2, 
+                 y = scaled_value, yend = scaled_value), 
+             color = "red", size = 1, alpha = 0.8) +
+  geom_hline(yintercept=3.09,colour='grey50',alpha=0.8,lty=2)+
+  ylab('Scaled avoided deforestation (Z-score)') +
+  xlab('Project')+
+  theme(legend.title=element_blank())
+
+ggsave(file.path(fig_path,'old_fig_2_aew.png'),
+       bg = 'white',
+       width = 6,
+       height = 5,
+       units = 'in'
+       )
+
+```
+
+Version with t-scores instead of Z-scores
+
+```{r}
+
+# add n column and t-score value
+
+joint_subset_t <- joint_subset_center_scale %>% 
+  group_by(ID) %>%
+  mutate(n = sum(type == "cf"),
+         t_score = (avd_def_yr - mean_cf) / (sd_cf / sqrt(n))) %>%
+  ungroup()
+
+joint_subset_t
+
+mean_sd_table_t <- joint_subset_t %>%
+  filter(type == "cf") %>%
+  select(ID, mean_cf, sd_cf, n) %>%
+  mutate(ID=as.factor(ID)) %>% 
+  distinct()
+
+vcs_subset_t <- vcs_subset %>%
+  mutate(ID=as.factor(ID)) %>%
+  left_join(mean_sd_table_t, by = "ID") %>%
+  mutate(
+    t_score = if_else(
+      cf_source == "VERRA",
+      (avd_def_yr - mean_cf) / (sd_cf / sqrt(n)),
+      NA_real_
+    )
+  )
+
+vcs_subset_t
+
+```
+
+Plotting
+
+```{r}
 
 
+joint_subset_t %>%
+  filter(!cf_source %in% c('SC','official')) %>%
+  mutate(ID = as.factor(ID)) %>%
+  mutate(type = fct_relevel(type, 'VCS')) %>%
+  # mutate(ID = fct_reorder(ID, cf_mean)) %>%
+  ggplot(aes(x = ID, color = type)) +
+  geom_hline(yintercept = 0) +
+  # geom_boxplot(outlier.colour = NA) +
+  #geom_boxplot(mapping=aes(y=scaled_value),position = position_dodge(width = 0.8)) +
+  geom_point(aes(y = t_score), position = position_jitterdodge(0.6), alpha = 0.3, size = 3) +
+#  geom_point(data = vcs_subset %>% filter(cf_source == 'VERRA'), aes(y = avd_def_yr, shape = cf_source), size = 3, alpha = 1, position = position_nudge(x = - 0.2)) +
+  #scale_shape_manual(values = c(16,17), labels = c("vcs_official", "VERRA")) +
+  scale_color_manual(values = c('red', 'blue'), labels = c("Certified", "QEM")) +
+  #geom_point(data = vcs_subset_center_scale %>% filter(cf_source == 'VERRA'), aes(y = scaled_value), shape = 16, size = 3, alpha = 1, position = position_nudge(x = - 0.2)) +
+geom_segment(data = vcs_subset_t %>% filter(cf_source == 'VERRA'), 
+             aes(x = as.numeric(ID) - 0.2, xend = as.numeric(ID) + 0.2, 
+                 y = t_score, yend = t_score), 
+             color = "red", size = 1, alpha = 0.8) +
+  ylab('Scaled avoided deforestation (t-score)') +
+  xlab('Project')+
+  theme(legend.title=element_blank())
+
+ggsave(file.path(fig_path,'old_fig_2_aew_t_scores.png'),
+       bg = 'white',
+       width = 6,
+       height = 5,
+       units = 'in'
+       )
+
+
+```
+
+Stats for the above
+
+```{r}
+
+dat_for_ttest <- joint_subset %>% 
+  filter(type=='cf') %>% 
+  select(ID,avd_def_yr)
+
+vcs_for_ttest <- vcs_subset %>% 
+  filter(cf_source=='VERRA') %>% 
+  select(ID,avd_def_yr) %>% 
+  mutate(t_value=NA,
+         p_value=NA)
+
+results <- vcs_for_ttest
+
+for(i in 1:nrow(results)){
+  
+  project_no <- results[i,1]
+  mu <- results[[i,2]]
+  x <- dat_for_ttest %>% 
+    filter(ID==project_no) %>% 
+    pull(avd_def_yr) %>% 
+    as.vector()
+  
+  result <- t.test(x=x,
+                   alternative='less',
+                   mu=mu)
+  
+  results[i,3] <- result$statistic
+  results[i,4] <- result$p.value
+  
+}
+
+results
+
+```
+
+Repeating the stats for the different certification methods
+
+
+```{r}
+
+joint_subset
+
+
+```
 
 Assessing the ratio of the average standard errors from certified vs statistical approaches
 

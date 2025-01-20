@@ -40,18 +40,22 @@ cont_data <- melt(cont_data)
 # rename labels
 
 cont_data$variable <- factor(cont_data$variable,levels=c('access','cpc0_u','cpc0_d',
-                                                         'slope','cpc5_u','cpc5_d',
-                                                         'elevation','cpc10_u','cpc10_d'))
+                                                         'slope',
+                                                         #'cpc5_u','cpc5_d',
+                                                         'elevation',
+                                                         #'cpc10_u','cpc10_d'
+                                                         ))
 
 levels(cont_data$variable) <- c('Inaccessibility',
                                 'Forest~cover~t[0]',
                                 'Deforestation~t[0]',
                                 'Slope',
-                                'Forest~cover~t[-5]',
-                                'Deforestation~t[-5]',
+                                #'Forest~cover~t[-5]',
+                                #'Deforestation~t[-5]',
                                 'Elevation',
-                                'Forest~cover~t[-10]',
-                                'Deforestation~t[-10]')
+                                #'Forest~cover~t[-10]',
+                                #'Deforestation~t[-10]'
+                                #')
 
 continuous <- ggplot(data=cont_data,mapping=aes(x=value,colour=type))+
   geom_density(adjust=10,size=1)+

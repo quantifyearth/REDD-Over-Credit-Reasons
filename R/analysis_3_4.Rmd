@@ -126,18 +126,18 @@ reference_area_dataset <- project_info %>% filter(project_no %in% reference_area
 
 NB project 934 has been excluded here because we cannot generate CPCs for its historical reference period.
 
-First we plot the locations of the project, reference area and PACT matched counterfactual for an exemplar project, VCS 944.
+First we plot the locations of the project, reference area and PACT matched counterfactual for an exemplar project, VCS 958.
 
 ```{r exemplar_locations}
 
 # extract input paths from config file
 
-all_data <- read.csv(project_info$path_to_tidy_data[project_info$project_no == 944])
+all_data <- read.csv(project_info$path_to_tidy_data[project_info$project_no == 958])
 
 # read in project and reference area shapefiles
 
-project_area <- read_sf(file.path(data_path,'project_combined.geojson')) %>% filter(ID==944)
-reference_area <- read_sf(file.path(data_path,'reference_combined.geojson')) %>% filter(ID==944)
+project_area <- read_sf(file.path(data_path,'project_combined.geojson')) %>% filter(ID==958)
+reference_area <- read_sf(file.path(data_path,'reference_combined.geojson')) %>% filter(ID==958)
 
 # get cf points from existing df
 
@@ -167,7 +167,7 @@ map_plot <- ggplot(data=cf_points,aes(x=lon,y=lat))+
  
 map_plot
 
-#ggsave(filename=file.path(fig_path,'fig_3_map_plot.png'),plot=map_plot,dpi=300,width=6,height=7)
+ggsave(filename=file.path(fig_path,'958_map.png'),plot=map_plot,dpi=300,width=6,height=7)
 
 ```
 
@@ -192,7 +192,7 @@ zoom_panel <- ggplot(data=cf_points,aes(x=lon,y=lat))+
 
 zoom_panel
  
-#ggsave(plot=zoom_panel,filename=file.path(fig_path,'fig_3_zoom_panel.png'),dpi=300,height=3,width=2)
+ggsave(plot=zoom_panel,filename=file.path(fig_path,'958_zoom_panel.png'),dpi=300,height=3,width=2)
 
 
 ```
@@ -252,7 +252,7 @@ univariate_comp <- ggplot(data=cont_data_melt,mapping=aes(x=value,colour=type,li
 
 univariate_comp
 
-#ggsave(univariate_comp,filename=file.path(fig_path,'fig_3_univariate_comp.png'),width=5,height=5,dpi=300)
+ggsave(univariate_comp,filename=file.path(fig_path,'958_univariate_comp.png'),width=5,height=5,dpi=300)
 
 
 
@@ -262,13 +262,27 @@ Here we calculate the mean values of the different variables for our exemplar pr
 
 ```{r variable_values}
 
-all_data %>% 
+stats_table <- all_data %>% 
   select(type,elevation,slope,access,starts_with('cpc')) %>% 
   group_by(type) %>% 
-  summarise_all(mean)
+  summarise_all(mean) %>% 
+  mutate(access_hrs = access / 60)
+
+stats_table
 
 
 ```
+
+Checking difference in amount of deforestation
+
+```{r}
+
+stats_table %>% select(type,cpc0_u, cpc10_u) %>% 
+  mutate(diff_percent = 100*(cpc10_u - cpc0_u))
+
+```
+
+
 
 Still focusing on our exemplar project, we can compare the project, self-selected reference area and PACT matched counterfactual in multivariate space. In order to make a custom plot we extract the ellipses produced using the factoextra and FactoMineR packages and plot these manually using ggplot2.
 
@@ -352,7 +366,7 @@ pca_plot <- pca_polys %>%
 
 pca_plot
 
-#ggsave(filename=file.path(fig_path,'fig_3_pca_plot.png'),plot=pca_plot,dpi=300,width=3.5,height=2)
+ggsave(filename=file.path(fig_path,'958_pca_plot.png'),plot=pca_plot,dpi=300,width=3.5,height=2)
 
 
 ```
@@ -360,6 +374,7 @@ pca_plot
 Now we generate the standardised mean differences across all projects. For the reference-project differences we match points based on the minimum Mahalanobis distance and extract the stanardised mean difference. For the counterfactual-project matches, the matching has already been carried out as part of the PACT method, and is stored in the structure of the data. 
 
 This step is time-consuming to run, so the results are provided in the directory /data. Should you wish to run it yourself the code is also provided below.
+
 
 ```{r smd}
 
@@ -399,32 +414,80 @@ if(file.exists(file.path(data_path,'std_mean_diff.csv'))) {
 
 ```
 
+We also run this step for a subset of projects for which data on the proportion of undisturbed/deforested land at t-5 (cpc5) is available:
 
-```{r plot_smd}
-# changing level order
 
-std_mean_diff_df$variable <- factor(std_mean_diff_df$variable,levels= c('cpc10_d','cpc5_d','cpc0_d',
-                'cpc10_u','cpc5_u','cpc0_u',
-                'access','slope','elevation'))
+```{r smd_cpc5}
 
-# plotting
+projects_with_cpc5 <- c(944 ,958,1112,1113,1115,1118,1201,1329,1566,1571,1650)
 
-std_mean_diff_plot <- ggplot(std_mean_diff_df,aes(x=smd,y=variable,colour=type))+
+if(file.exists(file.path(data_path,'std_mean_diff_cpc5.csv'))){
+  
+  std_mean_diff_cpc5 <- read.csv(file.path(data_path,'std_mean_diff_cpc5.csv'))
+  
+} else {
+  
+std_mean_diff_cpc5 <- data.frame(matrix(nrow=0,ncol=4))
+  colnames(std_mean_diff_cpc5) <- c('variable','smd','type','project_no')
+  
+  source(file.path(source_path,'std_mean_diff.R'))
+  
+  for(p in projects_with_cpc5) {
+      
+      all_data <- read.csv(paste0(data_path,'/tidy_data/',p,'.csv'))
+      project_no <- p
+      
+      df <- std_mean_diff(all_data,project_no)
+      
+      std_mean_diff_cpc5 <- rbind(std_mean_diff_cpc5,df)
+      
+    
+  }
+    
+  # reversing sign for interpretability (differences are relative to the project)
+    
+  std_mean_diff_cpc5$smd <- (-1)*std_mean_diff_cpc5$smd
+  
+  write.csv(std_mean_diff_cpc5,file.path(data_path,'std_mean_diff_cpc5.csv'),row.names=F)
+  
+}
+
+```
+
+Combining the datasets and plotting
+
+```{r}
+
+smd_cpc5_filt <- std_mean_diff_cpc5 %>% 
+  filter(str_detect(variable, "cpc5"))
+
+std_mean_diff_maxdata <- rbind(std_mean_diff_df, smd_cpc5_filt)
+
+std_mean_diff_maxdata$variable <- factor(std_mean_diff_maxdata$variable,levels= c(
+  #'cpc10_d',
+  'cpc5_d',
+  'cpc0_d',
+  #'cpc10_u',
+  'cpc5_u',
+  'cpc0_u',
+  'access','slope','elevation'))
+
+smd_maxdata_plot <- ggplot(std_mean_diff_maxdata,aes(x=smd,y=variable,colour=type))+
   geom_boxplot(outlier.shape=NA)+
   geom_point(alpha=0.3,position=position_jitterdodge(dodge.width=0.75,jitter.width=0.3))+
   geom_vline(xintercept=0)+
   geom_vline(xintercept=0.25,lty=2,colour='grey40')+
   geom_vline(xintercept=-0.25,lty=2,colour='grey40')+
   scale_colour_manual(breaks=c('Reference','Counterfactual'),values=c('red','blue'))+
-  scale_y_discrete(labels=c(bquote(Deforestation~t[-10]~("%")),
+  scale_y_discrete(labels=c(#bquote(Deforestation~t[-10]~("%")),
                             bquote(Deforestation~t[-5]~("%")),
                             bquote(Deforestation~t[0]~("%")),
-                            bquote(Forest~cover~t[-10]~("%")),
+                            #bquote(Forest~cover~t[-10]~("%")),
                             bquote(Forest~cover~t[-5]~("%")),
                             bquote(Forest~cover~t[0]~("%")),
                             'Inaccessibility (mins)',paste0('Slope (',intToUtf8(176),')'),'Elevation (m)'))+
   xlab('Standardised mean difference')+
-  xlim(-8,7)+
+  xlim(-5,3)+
   #geom_text(label=project_no)+
   theme_classic()+
   theme(axis.title.y=element_blank(),
@@ -434,22 +497,41 @@ std_mean_diff_plot <- ggplot(std_mean_diff_df,aes(x=smd,y=variable,colour=type))
         text=element_text(size=16),
         axis.text.y=element_text(size=16))
 
-std_mean_diff_plot
+smd_maxdata_plot
 
-ggsave(filename=file.path(fig_path,'fig_3_std_mean_diff_plot.png'),plot=std_mean_diff_plot,dpi=300,width=6,height=4)
-
-```
-
-
-From the standardised mean differences we can also extract figures for our exemplar project (VCS 944) to report in the text.
-
-```{r SMD_values}
-
-
-filter(std_mean_diff_df, project_no == 944)
+ggsave(filename=file.path(fig_path,'std_mean_diff_plot_maxdata.png'),plot=smd_maxdata_plot,dpi=300,width=6,height=4)
 
 
 ```
+
+Stats for the exemplar project
+
+```{r}
+
+filter(std_mean_diff_maxdata, project_no == 958) %>% 
+  mutate(smd = format(smd, scientific=F))
+
+```
+
+Summarise ref-project and cf-project smds across projects
+
+```{r}
+
+std_mean_diff_maxdata %>% 
+  filter(type=='Reference') %>% 
+  select(c(variable,smd)) %>% 
+  group_by(variable) %>% 
+  dplyr::summarize(median_smd = median(smd))
+
+std_mean_diff_maxdata %>% 
+  filter(type=='Counterfactual') %>% 
+  select(c(variable,smd)) %>% 
+  group_by(variable) %>% 
+  dplyr::summarize(median_smd = median(smd))
+
+
+```
+
 
 Finally, looking across all projects, we can calculate the similarities in multivariate space between project, reference and counterfactual for each project. As explained in the methods, this is calculated as the average of the the similarity (overlap) and (1-dissimilarity (distance)).
 
@@ -513,6 +595,13 @@ Extracting the mean similarities:
 ```{r mean_sims}
 
 pca_sims %>% select(avg_ref, avg_cf) %>% summarise_all(mean)
+
+```
+Checking similarity for 958
+
+```{r}
+
+pca_sims %>% filter(project==958) %>% select(avg_ref, avg_cf) %>% summarise_all(mean)
 
 ```
 
@@ -642,8 +731,6 @@ pca_polys %>%
 ```
 
 
-
-
 # Analysis 4
 
 We start by reading in the data on the self-reported deforestation rate in both the project and the baseline scenario. These data were extracted from project design documents and project monitoring documents. They are given here as rates in hectares per year. The method for calculating the evaluation period and annual rate is detailed in S6.
@@ -742,47 +829,7 @@ Extracting proportion of forest at t0:
 
 ```
 
-
-########## NEW BIT: COMPOUND DEFORESTATION #########
-
-
-Extracting project start years, and taking project end year to be 2021:
-
-```{r}
-
-# years <- project_info %>% 
-#   filter(project_no %in% pa_areas$project_no) %>% 
-#   select(start_year) %>% 
-#   pull() %>% 
-#   as.vector()
-# 
-# projects_years <- data.frame(project_no = analysis_4_projects,
-#                              start_year = years, 
-#                              end_year = 2021)
-# 
-# # projects_years <- projects_years %>% 
-# #   mutate(period_length = end_year - start_year)
-# 
-# projects_years
-
-```
-
-Expanding the df
-
-```{r}
-
-# expanded_df <- projects_years %>%
-#   select(project_no, start_year, end_year) %>%
-#   rowwise() %>%
-#   mutate(year = list(start_year:end_year)) %>%
-#   unnest(year) %>%
-#   select(project_no, year)
-# 
-# expanded_df
-
-```
-
-We now need to add another column with the % forest at tx.
+Compound deforestation calculations. We start by extracting the proportion of undisturbed forest at each year of the project, for each project.
 
 
 ```{r}
@@ -857,15 +904,23 @@ self_report_percent
 
 ```
 
-For the subset of projects for which we have data on the self-reported deforestation rates, we calculate the deforestation rates using the PACT method for both project and counterfactual, across all projects.
+For the subset of projects for which we have data on the self-reported deforestation rates, we calculate the deforestation rates using the PACT method for both project and counterfactual, across all projects. Deforestation rates are calculated for each year of the evaluation period.
 
 The inputs for this are the project datasets (as before) and the JRC evaluation periods. As explained in S6, the updating of JRC data in December of every year means that the JRC evaluation period must be adjusted to align optimally with the self-reported evaluation period. The method for doing this is detailed in S6.
+
+As this step is time consuming to run, results are provided in the csv 'pact_def_rates_compound_percent.csv'.
 
 ```{r PACT_def}
 
 # read in JRC evaluation periods
 
-jrc_eval_periods <- read.csv(file.path(data_path,'jrc_evaluation_periods.csv')) %>% 
+if(file.exists(file.path(data_path,'pact_def_rates_compound_percent.csv'))){
+  
+  pact_def_rates <- read.csv(file.path(data_path,'pact_def_rates_compound_percent.csv'))
+  
+  } else {
+  
+  jrc_eval_periods <- read.csv(file.path(data_path,'jrc_evaluation_periods.csv')) %>% 
   filter(project_no %in% analysis_4_projects) %>% 
   select(-jrc_period_length) %>%
   mutate(year = list(start_year_for_JRC:end_year_for_JRC)) %>%
@@ -902,6 +957,8 @@ for(p in 1:nrow(pact_def_rates)){
   pact_def_rates$pact_proj[p] <- proj_rate
   pact_def_rates$pact_cf[p] <- cf_rate
   
+  }
+
 }
 
 ```
@@ -912,7 +969,7 @@ We now average the PACT and self-reported rates across the years, obtaining two 
 avg_compound_pact_rates <- pact_def_rates %>%
   group_by(project_no) %>%
   dplyr::summarize(
-    pact_proj = mean(pact_proj, na.rm = TRUE),
+    pact_proj = mean(pact_project, na.rm = TRUE),
     pact_cf = mean(pact_cf, na.rm = TRUE)
   )
 
@@ -931,19 +988,26 @@ We can now combine the self-reported data with the PACT data. **We have 22 proje
 
 def_rates <- avg_compound_selfreport_rates %>% 
   select(project_no, self_proj, self_bsl) %>% 
-  mutate(pact_cf = avg_compound_pact_rates$pact_proj,
-              pact_proj = avg_compound_pact_rates$pact_cf)
+  mutate(pact_proj = avg_compound_pact_rates$pact_proj,
+              pact_cf = avg_compound_pact_rates$pact_cf)
 
 def_rates
 
 ```
 
 It is also necessary to calculate the historic deforestation rate in the reference area. This is assessed in the self-reported reference area during the self-reported historical evaluation period, but using the PACT method. It is only possible to calculate this for projects with reference areas available (n=16).
+Again, as this step is time consuming to run, results are provide in the csv 'reference_historical_def_rates.csv'.
 
 ```{r historic_rate}
 # read in self-reported historical period dates
 
-ref_periods <- read.csv(file.path(data_path,'historical_reference_periods.csv'))
+if(file.exists(file.path(data_path,'reference_historical_def_rates.csv'))){
+  
+  ref_hist_rates <- read.csv(file.path(data_path,'reference_historical_def_rates.csv')) %>% select(-X)
+
+} else {
+
+ref_periods <- read.csv(file.path(data_path,'reference_historical_def_rates.csv'))
 
 # expand df
 
@@ -980,6 +1044,10 @@ for(p in 1:nrow(ref_hist_rates)){
 
 }
 
+write.csv(ref_hist_rates,file=file.path(data_path,'reference_historical_def_rates.csv'))
+
+}
+
 head(ref_hist_rates)
 
 ```
@@ -990,7 +1058,9 @@ Now to filter, average and combine all the data:
 
 # filter out unwanted projects
 
-ref_hist_rates_filtered <- ref_hist_rates %>% filter(project_no != 1118)  # VCS 1118 is excluded due to being a negative creditor
+ref_hist_rates_filtered <- ref_hist_rates %>% 
+  filter(project_no != 1118) %>%   # VCS 1118 is excluded due to being a negative creditor
+  filter(project_no != 1400)  # VCS 1400 is exclude due to a lack of usable certified deforestation data
 
 # average rates across projects
 
@@ -1009,6 +1079,23 @@ def_rates_all
 
 ```
 
+Assessing the difference between reference and PACT control areas:
+
+```{r}
+
+plot(density(def_rates_all$ref_hist))
+plot(density(def_rates_all$pact_cf))
+
+# not really normal
+
+median(def_rates_all$ref_hist)
+median(def_rates_all$pact_cf)
+
+# wilcox test
+
+wilcox.test(def_rates_all$ref_hist, def_rates_all$pact_cf, paired = T)
+
+```
 
 Here we filter out overcrediting projects are filtered out based on the PACT-specific results from analysis 1. Projects with an adjusted additionality of < 1 (i.e. PACT additionality < self-reported additionality) are overcreditors. 
 
@@ -1094,14 +1181,14 @@ panel_a <- panel_a_df %>%
   stat_summary(fun=median,geom='crossbar',width=0.2,aes(colour=variable))+
   scale_fill_manual(values=cols_list)+
   scale_colour_manual(values=cols_list)+
-  scale_x_discrete(labels=c(' ACC \n \n Matched \n \n 15',
-                            ' ACC \n \n Expert-defined \n \n 11',
-                            'Certified \n \n Expert-defined \n \n 15 ',
-                            ' ACC \n \n Project \n \n 11',
-                            'Certified \n \n Project \n \n 11'))+
+  scale_x_discrete(labels=c(' ACC \n \n QEM \n \n 15',
+                            ' ACC \n \n Certified \n \n 11',
+                            'Certified \n \n Certified \n \n 15 ',
+                            ' ACC \n \n Project \n \n 15',
+                            'Certified \n \n Project \n \n 15'))+
   ylab('Deforestation rate (%/year)')+
-  annotate(geom='text',x=1.9,y=5,label='Counterfactual',size=20/.pt,colour="#2171B5")+
-  annotate(geom='text',x=4.5,y=5,label='Project',size=20/.pt,colour='grey30')+
+  annotate(geom='text',x=1.9,y=5,label='Counterfactual \n estimate',size=20/.pt,colour="#2171B5")+
+  annotate(geom='text',x=4.5,y=5,label=' Project \n measurement',size=20/.pt,colour='grey30')+
   theme_classic()+
   theme(axis.title.x = element_blank(),
         legend.position = 'none',
@@ -1112,7 +1199,13 @@ panel_a <- panel_a_df %>%
 panel_a
 
 ```
+Medians:
 
+```{r}
+
+panel_a_summary
+
+```
 
 Now we can plot the distribition of pairwise differences between counterfactual and project deforestation rates, for each project.
 
@@ -1151,7 +1244,7 @@ panel_b <- def_rates_overcred %>%
   geom_errorbar(data=panel_b_summary,aes(x=variable,colour=variable,ymin=lq, ymax=uq),width=0.2,inherit.aes=F)+
   scale_fill_manual(values=c("#2171B5",'grey30',"#F15412"))+
   scale_colour_manual(values=c("#2171B5",'grey30',"#F15412"))+
-  scale_x_discrete(labels=c('Counterfactual','Project','Combined'))+
+  scale_x_discrete(labels=c('Counterfactual \n estimate',' Project \n measurement','Combined'))+
   annotate(geom='text',x=3.7,y=0.8,label='Overcrediting',angle=90,size=18/.pt,colour='grey30')+
   #annotate(geom='text',x=3.7,y=-1.5,label='Undercrediting',angle=90,size=18/.pt,colour='grey50')+
   ylab('Difference in deforestation rate (%/year)')+
@@ -1199,12 +1292,12 @@ panel_c <- def_rates_overcred_withdiff %>%
   geom_bar(position='stack', stat='identity',width=0.7,alpha=0.5)+
   theme_classic()+
   scale_fill_manual(breaks=c('bsl_diff','proj_diff'),
-                    labels=c('Counterfactual','Project'),values=c("#2171B5",'grey30'))+
+                    labels=c('Counterfactual estimate','Project measurement'),values=c("#2171B5",'grey30'))+
   scale_x_discrete(guide = guide_axis(angle = 90))+
   ylab('Difference in deforestation rate (%/year)')+
   xlab('Project ID')+
   geom_hline(yintercept=0,lty=2,col='grey30')+
-  annotate(geom='text',x=16.5,y=2,label='Overcrediting',angle=90,size=18/.pt,colour='grey30')+
+  annotate(geom='text',x=16.5,y=1,label='Overcrediting',angle=90,size=18/.pt,colour='grey30')+
   #annotate(geom='text',x=18.5,y=-1.5,label='Undercrediting',angle=90,size=18/.pt,colour='grey50')+
   coord_cartesian(xlim=c(1,18))+
   theme(legend.title=element_blank(),
@@ -1335,5 +1428,4 @@ wilcox.test(def_rates_overcred_diff$sum)
 
 ```
  
-
 

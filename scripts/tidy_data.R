@@ -9,15 +9,13 @@ tidy_data <- function(project_no, base_path){
     
     pact_path <- paste0(base_path,'/pact_data_raw/',project_no) # path to pact data
     ref_path <- paste0(base_path,'/reference_raw/',project_no,'.parquet') # path to reference data
-    hist_path <- paste0(base_path,'/data/analysis_3_4/historical_raw/',project_no,'.parquet') # path to historical data
     
     # manual correction for 1112
     
     if(project_no == 1112){
       
       ref_path <- paste0(base_path,'/reference_raw/1113.parquet')
-      hist_path <- paste0(base_path,'/historical_raw/1113.parquet')
-      
+
     }
     
     # read in pact data
@@ -86,21 +84,13 @@ tidy_data <- function(project_no, base_path){
         
       }
       
+      # check no negative access values
+      
+      merged_df <- filter(merged_df,access >= 0)
+      
       # write data to csv
       
       write.csv(merged_df, paste0(base_path,'/tidy_data/',project_no,'.csv')) # keep index column for use in PCA overlap analysis (row.names = T)
-      
-    }
-    
-    # also tidy historical data, if we have it
-    
-    if(file.exists(hist_path)){
-      
-      historical <- read_parquet(hist_path)
-      
-      write.csv(historical, paste0(base_path,'/tidy_data_historical/',project_no,'.csv'))
-      
-      print(paste('Historical data tidied for project',project_no))
       
     }
     
