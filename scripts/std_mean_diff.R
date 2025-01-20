@@ -4,8 +4,14 @@ library(magrittr)
 library(stringr)
 library(MatchIt)
 
-match_vars <- c('cpc10_d','cpc5_d','cpc0_d',
-                'cpc10_u','cpc5_u','cpc0_u',
+# comment out match vars as appropriate
+
+match_vars <- c(#'cpc10_d',
+                'cpc5_d',
+                'cpc0_d',
+                #'cpc10_u',
+                'cpc5_u',
+                'cpc0_u',
                 'access','slope','elevation')
 
 # secondary function for matching
@@ -86,7 +92,7 @@ std_mean_diff <- function(all_data,project_no) {
   
   results <- rbind(ref_results,cf_results)
   results$type <- c(rep(times=length(match_vars),x='Reference'),rep(times=length(match_vars),x='Counterfactual'))
-  results$project_no <- rep(times=length(results),x=project_no)
+  results$project_no <- project_no
   
   return(results)
   

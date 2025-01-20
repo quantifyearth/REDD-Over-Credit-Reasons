@@ -1,25 +1,27 @@
 
-compare_def_rates <- function(project_no,t0,tend,jrc_period_length,all_data){
+calculate_def_rate <- function(project_no,t0,tend,data){
   
-  # filter out reference data if present
+  # filter out columns with all NAs
   
-  all_data <- all_data %>% filter(type!='Reference')
+  data <- data %>% 
+    dplyr::select(where(~ !all(is.na(.))))
   
+  # check if dataframe contains both of the columns we're interested in 
+  
+  required_columns <- paste0("luc_", c(t0, tend))
+  
+  if(all(required_columns %in% colnames(data))){
+    
   # count number of 1s at project start
   
-  t0_index <- grep(paste0('luc_',t0),colnames(all_data))
+  t0_index <- grep(paste0('luc_',t0),colnames(data))
   
-  data_filtered <- all_data[all_data[,t0_index]==1,]
+  data_filtered <- data[data[,t0_index]==1,]
   
-  project_1s <- data_filtered %>% filter(type=='Project') %>% 
-    nrow()
-  
-  cf_1s <- data_filtered %>% filter(type=='Counterfactual') %>% 
+  no_1s <- data_filtered %>% 
     nrow()
   
   # identify where there have been changes (1 == change)
-  
-  if(exists(paste0('luc_',tend),where=data_filtered)==TRUE) {
   
   luc_tend <- data_filtered %>% 
     select(paste0('luc_',tend))
@@ -35,31 +37,20 @@ compare_def_rates <- function(project_no,t0,tend,jrc_period_length,all_data){
   
   # count up number of pixels where there have been changes for each type
   
-  project_changes <- data_filtered %>% filter(type=='Project' & response==1) %>% 
+  changes <- data_filtered %>% filter(response==1) %>% 
     nrow()
   
-  cf_changes <- data_filtered %>% filter(type=='Counterfactual' & response==1) %>% 
-    nrow()
+  # calculate deforestation rates as percentage
   
-  # calculate deforestation rates
-  
-  project_def_rate <- project_changes/project_1s
-  cf_def_rate <- cf_changes/cf_1s
+  def_rate <- 100*(changes/no_1s)
   
   } else {
   
-    project_def_rate <- NA
-    cf_def_rate <- NA
+    def_rate <- NA
   
   }
   
-  df <- data.frame(matrix(nrow=1,ncol=3))
-  colnames(df) <- c('project_no','pact_project','pact_cf')
-  df[1,1] <- project_no
-  df[1,2] <- 100*(project_def_rate/jrc_period_length) # convert to annual percentage
-  df[1,3] <- 100*(cf_def_rate/jrc_period_length) # convert to annual percentage
-  
-  return(df)
+  return(def_rate)
   
 }
 

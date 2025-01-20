@@ -28,7 +28,8 @@ index <- data$X
 # subsetting data for pca
 
 data_for_pca <- data %>% 
-  select(-c(X,type,pair,lat,lng,starts_with('luc'))) %>% 
+  select(-c(X,type,pair,lat,lng,starts_with('luc'),
+            cpc5_u, cpc5_d, cpc10_u, cpc10_d)) %>% # remove cpcs 5 and 10 because missing from reference
   data.frame()
 
 # run pca and get ellipse data

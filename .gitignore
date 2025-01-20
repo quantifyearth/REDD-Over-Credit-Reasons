@@ -11,4 +11,5 @@
 *.geojson
 manage_files.R
 /scripts/std_mean_diff_OLD.R
+/scripts/reference_historical_deforestation.R
 data.zip
