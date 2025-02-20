@@ -34,6 +34,7 @@ Used in fig5:
 - acc_pact_project_rates
 - certified_control_rates
 - certified_project_rates
+- acc_certified_control_rates
 
 #### Parquets
 
