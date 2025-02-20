@@ -7,7 +7,7 @@ This code is structured as separate R scripts relating to each figure or supplem
 ### Inputs
 
 The data can be downloaded at the following DOI: [10.5281/zenodo.14895067](https://doi.org/10.5281/zenodo.14895067)
-Different data types are organised into folders relating to each file format. These folders should be each placed in the same directory as the scripts.
+Different data types are organised into folders relating to each file format. These folders should be placed in the same directory as the scripts.
 
 #### CSVs
 
@@ -52,8 +52,8 @@ Used in fig3, s4:
 - project_area_geojsons (folder of geojsons)
 
 Used in fig4:
-- certified_control_area_geojsons
-- project_area_geojsons
+- certified_control_area_geojsons (folder of geojsons)
+- project_area_geojsons (folder of geojsons)
 
 
 ### Usage
