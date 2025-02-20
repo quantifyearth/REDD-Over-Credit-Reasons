@@ -1,68 +1,60 @@
-# Independent statistical approaches address overcrediting problems in REDD+: Code for analysis
+# Understanding the reasons for over-crediting in REDD+
 
-This repository contains the code used for the analyses in *Independent statistical approaches address overcrediting problems in REDD+* (Swinfield et al). The code will generate all of the figures and statistical outputs included in both the main text and the supplementary information.
+This repository contains the code used for the analyses in *Understanding the reasons for over-crediting in REDD+* (Swinfield et al). The code will generate all of the figures and statistical outputs included in both the main text and the supplementary information.
 
-The analyses detailed in the results can be divided into 4 sections:
-
-1.  Independent methods suggest consistently less avoided deforestation
-2.  Less varied avoided deforestation from independent approaches
-3.  Self-reported reference areas are not well-matched to projects
-4.  Differences in counterfactual deforestation rates explain overcrediting
-
-Analyses 1 and 2 were carried out as one group, and analyses 3 and 4 as another.
-
-### Respository structure
-
--   Code for analyses 1-2 is contained within `/R/analysis_1_2.Rmd`
-
--   Code for analyses 3-4 is contained within `/R/analysis_3_4.Rmd`
-
--   Scripts called in the above R notebooks are contained within `/scripts`
-
--   Data is stored in an external repository (see 'Inputs')
+This code is structured as separate R scripts relating to each figure or supplement. For scripts fig3, and fig4, compound rates extracted from the PACT parquet files will be written as .csvs to be read by fig.5. 
 
 ### Inputs
 
-The data can be downloaded at the following DOI: [10.5281/zenodo.12698858](https://zenodo.org/doi/10.5281/zenodo.12698858)
+The data can be downloaded at the following DOI: [10.5281/zenodo.14895067](https://doi.org/10.5281/zenodo.14895067)
+Different data types are organised into folders relating to each file format. These folders should be each placed in the same directory as the scripts.
 
-`analysis_1_2.Rmd` uses the following inputs, contained within `data/analysis_1_2`:
+#### CSVs
 
--   `Project_country_method.csv`, containing information about the projects to evaluate, including country, start date and the method used to evaluate them
+Used in fig2, s3, and s8:
 
--   `project_summaries.csv`, containing a summary of the outputs of the PACT evaluation method (in terms of avoided deforestation) for each project.
+- ag_2022_avoided_amounts
+- ag_2024_avoided_amounts
+- tw_2020_avoided_amounts 
+- tw_2023_avoided_amounts
+- tw_2024_avoided_amounts
+- pact_2025_avoided_amounts
+- certified_avoided_amounts
+- project_metadata
 
--   `AG_2022.csv` and `AG_2024.csv`, data from Guizar-Coutino et al (2022) and (2024)
+Used in fig3, s4: 
+- evaluation_end_years
+- certified_project_amounts
 
--   `TW_2020.csv`, `TW_2023.csv`, data from West et al (2020) and (2023).
+Used in fig 4, s7:
+- evaluation_end_years
 
--   `TW_2024_SC.csv`, synthetic control data from West et al (2024).
+Used in fig5:
+- acc_pact_control_rates
+- acc_pact_project_rates
+- certified_control_rates
+- certified_project_rates
 
--   `TW_2024_1.csv`, `TW_2024_2.csv`, and `TW_2024_3.csv`, data from West et al (2024)
+#### Parquets
 
--   `certified.csv`, containing the self-reported avoided deforestation rates.
+Used in fig3, s4: 
+- acc_project_area_parquets (folder of parquets)
 
-`analysis_3_4.Rmd` uses the following inputs, contained within `data/analysis_3_4`:
+Used in fig4, s7: 
+- acc_certified_control_parquets (folder of parquets)
+- acc_pact_matching_parquets (folder of parquets)
 
--   `project_info.csv`, a config file containing the VCS IDs and start years for each project analysed
 
--   `tidy_data/`, the folder containing the cleaned outputs of our pipeline for each set of project points and its corresponding counterfactual. Each row of the `.csv` file represents a separate point. The identity of the point ('Project' or 'Counterfactual', plus 'Reference' if reference data is available) is contained within the `type` column.
+#### Geojsons
 
--   `tidy_data_historical/`, the folder containing containing only the set of points extracted from the self-reported reference area during the historical period.
+Used in fig3, s4: 
+- project_area_geojsons (folder of geojsons)
 
--   `/data/project_shapefiles`, containing the shapefiles delineating the boundaries of the projects.
+Used in fig4:
+- certified_control_area_geojsons
+- project_area_geojsons
 
--   `/data/reference_shapefiles`, containing the shapefiles delineating the boundaries of the self-reported reference areas. These were digitised by hand or using colour thresholding in R.
-
--   `/data/CF_VCS_avoided_deforestation.csv`, an output of `analysis_1_2.Rmd` containing additionality information about each project.
-
--   `/data/historical_reference_periods.csv`, containing the years of the self-reported historical reference periods for each project, as reported in project design documents.
-
--   `/data/jrc_evaluation_periods.csv`, containing the years of the JRC-ACC evaluation period chosen to match most closely with the self-reported evaluation period.
-
--   `/data/countries.csv`, containing the countries in which each of the projects (with reference areas) is located
-
-We also include the master spreadsheet, `VERRA.xlsx`, within `/data`. This contains the project-specific data sources from which information about certified deforestation rates was extracted.
 
 ### Usage
 
-This project requires R studio. Each `.Rmd` file is designed to be run as a self-contained entity from start to finish, either by knitting the file or by running each code chunk individually. Note that `analysis_3_4.Rmd` deals with larger datasets and so takes significantly longer to run than `analysis_1_2.Rmd.`
+These scripts require R and several dependent libraries specified at the start of each script. It is important to note that fig4.R and s7.R may take a while to run due to calculating compound deforestation rates across multiple parquets.

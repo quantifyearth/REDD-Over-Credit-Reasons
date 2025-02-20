@@ -3,13 +3,11 @@
 .RData
 .Ruserdata
 .RDataTmp
-/figures/
-/outputs/
 /R/*.html
 /R/*files
 /data/
+/csvs/
+/geojsons/
+/parquets/
 *.geojson
-manage_files.R
-/scripts/std_mean_diff_OLD.R
-/scripts/reference_historical_deforestation.R
 data.zip
