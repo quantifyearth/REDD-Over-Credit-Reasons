@@ -151,8 +151,8 @@ fig3a_plot = ggplot(comparison_df, aes(x = cert_rate, y = acc_rate)) +
   theme_classic() +
   theme(axis.title = element_text(size = 19),
         axis.text = element_text(size = 13)) +
-  labs(x = "Certified Rate (%/year)",
-       y = "ACC Rate (%/year)")
+  labs(x = "Certified deforestation (%/year)",
+       y = "ACC deforestation (%/year)")
 
 # ---- FIGURE 3B ----
 
@@ -176,11 +176,11 @@ fig3b_plot = ggplot(plot_comparison_df, aes(x = variable, y = value, colour = va
   position = position_dodge(width = 0.5)) + 
   stat_summary(fun = median, geom = "crossbar", width = 0.2,
                linewidth = 1, position = position_dodge(width = 0.5)) +
-  scale_x_discrete(labels = c("acc_rate" = "ACC Project\nQuasi-Experimental Methods\n(n = 36)",
-                              "cert_rate" = "Certified Project\nCertified Methods\n(n = 36)")) +
+  scale_x_discrete(labels = c("acc_rate" = "ACC Project (n = 36)",
+                              "cert_rate" = "Certified Project (n = 36)")) +
   scale_color_manual(values = c("acc_rate" = "darkorchid4", "cert_rate" = "firebrick")) +
   scale_y_continuous(labels = function(x) sprintf("%.1f", x)) +
-  ylab("Deforestation Rate (%/year)") +
+  ylab("Deforestation (%/year)") +
   theme_classic() +
   theme(axis.title  = element_text(size = 19),
         axis.title.x = element_blank(),
@@ -223,5 +223,5 @@ shapiro.test(comparison_df$cert_rate)
 shapiro.test(comparison_df$acc_rate)
 wilcox.test(comparison_df$acc_rate, comparison_df$cert_rate, alternative = "greater", paired = TRUE)
 
-# pairwise mean difference
+# difference
 median(comparison_df$acc_rate - comparison_df$cert_rate)
