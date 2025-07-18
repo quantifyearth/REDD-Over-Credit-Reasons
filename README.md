@@ -6,7 +6,7 @@ This code is structured as separate R scripts relating to each figure or supplem
 
 ### Inputs
 
-The data can be downloaded at the following DOI: [10.5281/zenodo.14895067](https://doi.org/10.5281/zenodo.14895067)
+The data can be downloaded at the following DOI: 10.5281/zenodo.15745712
 Different data types are organised into folders relating to each file format. These folders should be placed in the same directory as the scripts.
 
 #### CSVs
