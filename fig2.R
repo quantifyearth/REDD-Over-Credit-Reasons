@@ -19,9 +19,8 @@ tw_2020_df = read.csv(file.path("csvs", "tw_2020_avoided_amounts.csv"))
 tw_2023_df = read.csv(file.path("csvs", "tw_2023_avoided_amounts.csv"))
 tw_2024_df = read.csv(file.path("csvs", "tw_2024_avoided_amounts.csv"))
 ag_2022_df = read.csv(file.path("csvs", "ag_2022_avoided_amounts.csv"))
-ag_2024_df = read.csv(file.path("csvs", "ag_2024_avoided_amounts.csv")) %>%
-  select(ID = vcs_id, Avd_def = DD_ha) %>%
-  mutate(ID = as.numeric(str_replace(ID, "PL", ""))) %>%
+ag_2025_df = read.csv(file.path("csvs", "ag_2025_avoided_amounts.csv")) %>%
+  select(ID = id, Avd_def = avoided_ha) %>%
   mutate(Avd_def = -Avd_def)  # reverse sign for avoided deforestation
 
 # pact assessments
@@ -85,11 +84,11 @@ ag_2022_df = ag_2022_df %>%
   mutate(source = "AG_2022",
          label = "guizar-coutino 22")
 
-# align statistical assessments for ag_2024
-ag_2024_df = ag_2024_df %>%
+# align statistical assessments for ag_2025
+ag_2025_df = ag_2025_df %>%
   mutate(Start = 0, End = 5) %>%
   select(c("ID", "Start", "End", "Avd_def")) %>%
-  mutate(source = "AG_2024",
+  mutate(source = "ag_2025",
          label = "guizar-coutino 24")
 
 # align pact assessments
@@ -100,7 +99,7 @@ pact_v2_df = pact_v2_df %>%
          label = "pactv2")
 
 # combine all datasets into one
-combined_df = rbind(tw_2020_df, tw_2023_df, tw_2024_df, ag_2022_df, ag_2024_df, pact_v2_df, vcs_df) %>%
+combined_df = rbind(tw_2020_df, tw_2023_df, tw_2024_df, ag_2022_df, ag_2025_df, pact_v2_df, vcs_df) %>%
   mutate(ID = as.factor(ID)) %>%
   mutate(avd_def_yr = Avd_def / (End - Start))
 
@@ -237,23 +236,26 @@ boot_ratios_df = replicate(n_bootstraps, {
   sample_idx = sample(length(cf_vcs_avd_comp_mean_df$VERRA), replace = TRUE)
   sum(cf_vcs_avd_comp_mean_df$VERRA[sample_idx]) / sum(cf_vcs_avd_comp_mean_df$cf_avd_mean[sample_idx])
 })
-
 cat(sprintf("Global Certified/Quasi-experimental: %.2f", cf_avd_mean), 
     "\n95% CI:", quantile(boot_ratios_df, c(0.025, 0.975)))
     
-# probst proprotions
+# proportions
 proportions_df = cf_vcs_avd_comp_mean_df$cf_avd_mean / cf_vcs_avd_comp_mean_df$VERRA
 proportions_df = ifelse(proportions_df < 0, 0, proportions_df)
 mean_proportion = mean(proportions_df, na.rm = TRUE)
+1/mean_proportion
 
+# p value for the mean
+p_value = t.test(proportions_df, mu = 1, alternative = "less")$p.value
+p_value
 
 # Bootstrap 95% CI
 boot_proportions_df <- replicate(10000, {
   sample_idx <- sample(length(proportions_df), replace = TRUE)
   mean(proportions_df[sample_idx], na.rm = TRUE)
 })
-cat("Median Assessed/Claimed:", mean_proportion, 
-    "\n95% CI:", quantile(boot_proportions_df, c(0.025, 0.975)))
+cat("Mean Project Over Crediting:", 1/mean_proportion, 
+    "\n95% CI:", quantile(1/boot_proportions_df, c(0.025, 0.975)))
 
 # prepare data for plotting fig 2a (line data)
 new_dat_df = data.frame(cf_avd_mean = seq(from = min(cf_vcs_avd_comp_mean_df$cf_avd_min),
@@ -266,24 +268,31 @@ asinh_inv = function(x) sinh(x)
 
 # plot fig 2a (scatter and line plot)
 fig2a_plot = 
-  ggplot(data = cf_vcs_avd_comp_mean_df, aes(y = VERRA, x = cf_avd_mean)) +
+  ggplot() +
   geom_vline(xintercept = 0, col = "black", linetype = 1, linewidth = 0.5) +
   geom_hline(yintercept = 50, col = "black", linetype = 1, linewidth = 0.5) +
-  geom_line(data = new_dat_df, col = "darkred", linetype = 2, linewidth = 0.75) +
-  geom_point(size = 5, alpha = 0.8, aes(color = as.factor(n))) +
+  geom_line(data = new_dat_df, col = "darkred", linetype = 2, linewidth = 0.75,
+            aes(x = VERRA, y = cf_avd_mean)) +
   geom_errorbar(data = cf_vcs_avd_comp_mean_df,
-                aes(xmin = cf_avd_ci_min, xmax = cf_avd_ci_max, color = as.factor(n))) +
-  scale_x_continuous(limits = c(-1500, 2500), breaks = c(-1500 ,-1000, -500, 0, 500, 1000, 1500, 2000)) +
+                aes(x = cf_avd_mean, y = VERRA, xmin = cf_avd_ci_min, xmax = cf_avd_ci_max, color = as.factor(n))) +
+  geom_point(data = cf_vcs_avd_comp_mean_df %>% filter(cf_avd_mean < 0), 
+             aes(y = VERRA, x = cf_avd_mean), size = 7, color = "#DD4444") +
+  geom_point(data = cf_vcs_avd_comp_mean_df, 
+             aes(y = VERRA, x = cf_avd_mean, color = as.factor(n)),
+             size = 5, alpha = 1) +
+  scale_x_continuous(limits = c(-1700, 2500), breaks = c(-1500, -1000, -500, 0, 500, 1000, 1500, 2000)) +
   scale_y_continuous(trans = scales::trans_new("asinh", asinh_trans, asinh_inv),
-                     limits = c(50, 15000), breaks = c(100, 1000, 10000)) +
+                     limits = c(50, 19000), breaks = c(100, 1000, 10000)) +
   scale_color_manual(values = my_colors, labels = c("1", "2", "3", "4")) +
-  ylab("Certified avoided deforestation) (ha/year)") +
+  ylab("Certified avoided deforestation (ha/year)") +
   xlab("Quasi-experimental avoided deforestation (ha/year)") +
-  geom_text_repel(data = data.frame(x = 1500, y = 10000, label = "Over Crediting"),
-                   aes(x = x, y = y, label = label), size = 8, color = "black", force = 0) +
-  geom_text_repel(data = data.frame(x = 1500, y = 100, label = "Under Crediting"),
+  geom_text_repel(data = data.frame(x = 1800, y = 3000, label = "Over Crediting"),
                   aes(x = x, y = y, label = label), size = 8, color = "black", force = 0) +
-  geom_text_repel(data = data.frame(x = -800, y = 100, label = "Negative Crediting"),
+  geom_text_repel(data = data.frame(x = 1800, y = 940, label = "Under Crediting"),
+                  aes(x = x, y = y, label = label), size = 8, color = "black", force = 0) +
+  geom_text_repel(data = data.frame(x = 1000, y = 18000, label = "Decreased Deforestation →"),
+                  aes(x = x, y = y, label = label), size = 8, color = "black", force = 0) +
+  geom_text_repel(data = data.frame(x = -1000, y = 18000, label = "← Increased Deforestation"),
                   aes(x = x, y = y, label = label), size = 8, color = "black", force = 0) +
   theme(axis.line = element_blank(),
         axis.text = element_text(size = 16),
@@ -292,17 +301,15 @@ fig2a_plot =
         legend.spacing = unit(0, "cm"),
         legend.text = element_text(size = 16),
         legend.title = element_text(size = 18)) +
-  guides(shape = guide_legend(ncol = 2, bycol = TRUE, title = NULL,
-                              override.aes = list(size = 16, col = "black")),
-         color = guide_legend(ncol = 4, bycol = TRUE, title = "Number of studies",
+  guides(color = guide_legend(ncol = 4, bycol = TRUE, title = "Number of studies",
                               override.aes = list(shape = 16, size = 5, alpha = 0.5)))
 
 # create df of negative additionality ratios for plotting
 cf_vcs_avd_comp_mean_df_neg = cf_vcs_avd_comp_mean_df %>%
   filter(cf_Aadj_mean < 0) %>%
-  mutate(cf_Aadj_mean = 0)
+  mutate(cf_Aadj_mean = 1400)
 
-# plot fig 2c (additionality ratio plot)
+# plot fig 2b (additionality ratio plot)
 fig2b_plot = cf_vcs_avd_comp_mean_df %>%
   filter(cf_Aadj_mean > 0) %>%
   ggplot(aes(x = VERRA, y = cf_Aadj_mean)) +
@@ -310,20 +317,23 @@ fig2b_plot = cf_vcs_avd_comp_mean_df %>%
   geom_hline(yintercept = 1, col = "darkred", linetype = 2, linewidth = 0.75) +
   geom_hline(yintercept = cf_avd_mean, linewidth = 0.75,
              col = "grey", linetype = 'dotdash') +
-  geom_point(size = 5, alpha = 0.8, aes(color = as.factor(n))) +
-  geom_point(data = cf_vcs_avd_comp_mean_df_neg, aes(x = VERRA, y = cf_Aadj_mean), 
-             shape = 15, size = 5, color = "#DD4444") +
+  geom_hline(yintercept = 1/mean_proportion, col = "darkgreen", linetype = 'dotdash', linewidth = 0.75) +
+  geom_point(size = 5, alpha = 1, aes(color = as.factor(n))) +
+  geom_point(data = cf_vcs_avd_comp_mean_df_neg, aes(x = VERRA, y = cf_Aadj_mean),
+             shape = 18, size = 5, color = "#DD4444") +
   scale_color_manual(values = my_colors, labels = c("1", "2", "3", "4")) +
   xlab("Certified avoided deforestation (ha/year)") +
   ylab("Additionality ratio") +
-  geom_text_repel(data = data.frame(x = 8000, y = 1.8, label = "Over Crediting ↑"),
+  geom_text_repel(data = data.frame(x = 9000, y = 1.8, label = "Over Crediting ↑"),
                   aes(x = x, y = y, label = label), size = 8, color = "black", force = 0) +
-  geom_text_repel(data = data.frame(x = 8000, y = 0.4, label = "Under Crediting ↓"),
+  geom_text_repel(data = data.frame(x = 9000, y = 0.4, label = "Under Crediting ↓"),
                   aes(x = x, y = y, label = label), size = 8, color = "black", force = 0) +
-  geom_text_repel(data = data.frame(x = 8000, y = cf_avd_mean + 1.7, label = "italic('Global Mean (8.96)')"),
+  geom_text_repel(data = data.frame(x = 9000, y = cf_avd_mean + 2, label = "italic('Global Mean (9.3)')"),
+                  aes(x = x, y = y, label = label), size = 8, color = "black", parse = TRUE, force = 0) +
+  geom_text_repel(data = data.frame(x = 9000, y = 1/mean_proportion + 1, label = "italic('Project Mean (4.3)')"),
                   aes(x = x, y = y, label = label), size = 8, color = "black", parse = TRUE, force = 0) +
   scale_x_continuous(trans = scales::trans_new("asinh", asinh_trans, asinh_inv),
-                     limits = c(50, 15000), breaks = c(100, 1000, 10000)) +
+                     limits = c(50, 16000), breaks = c(100, 1000, 10000)) +
   scale_y_continuous(trans = scales::trans_new("asinh", asinh_trans, asinh_inv),
                      breaks = c(1,10,100,1000)) +
   theme(axis.line = element_blank(),
@@ -346,5 +356,8 @@ fig2_plot = fig2a_plot / fig2b_plot +
   plot_annotation(tag_levels = "a") &
   theme(plot.tag = element_text(size = 25))
 
-# save final figure to png
-ggsave(fig2_plot, filename = file.path("pngs", "fig2_raw.png"), dpi = 1200, width = 12, height = 16)
+# save final figure to svg
+ggsave(fig2_plot, filename = file.path("pngs", "fig2_raw.svg"), width = 12, height = 18)
+ggsave(fig2_plot, filename = file.path("pngs", "fig2_raw.png"), width = 12, height = 18, dpi = 300)
+
+

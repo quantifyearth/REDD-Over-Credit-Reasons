@@ -212,8 +212,8 @@ combined_plot = (fig3a_plot + fig3b_plot + plot_layout(ncol = 2)) &
 combined_plot
 # ---- SAVE FINAL PLOT ----
 
-ggsave("pngs/fig3_raw.png", combined_plot, bg = "white",
-       width = 14, height = 7, units = "in", dpi = 500)
+ggsave("pngs/fig3_raw.svg", combined_plot,
+       width = 14, height = 7)
 
 #---- EXTRACT STATS ----
 

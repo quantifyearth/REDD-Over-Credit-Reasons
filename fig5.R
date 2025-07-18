@@ -2,6 +2,7 @@ library(tidyverse)
 library(ggsignif)
 library(ggtext)
 library(patchwork)
+library(ggpattern)
 
 # ---- READ AND PROCESS DATA ----
 
@@ -32,8 +33,27 @@ comparison_df = acc_certified_control_df %>%
   left_join(certified_control_df, by = "project_no")
 
 comparison_df$correction_coef = median(comparison_df$certified_project_rate / comparison_df$pact_project_rate)
-comparison_df$pact_project_bespoke_rate = comparison_df$pact_project_rate * comparison_df$correction_coef
+# histogram of correction_coef
+ggplot(comparison_df, aes(x = certified_project_rate / pact_project_rate)) +
+  geom_histogram(bins = 10, fill = "#26547c", color = "black") +
+  xlab("Correction Coefficient") +
+  ylab("Frequency") +
+  # add median line
+  geom_vline(xintercept = median(comparison_df$certified_project_rate / comparison_df$pact_project_rate), 
+             linetype = "dashed", color = "#ef476f", linewidth = 1) +
+  # add smoothed density line
+  geom_density(aes(y = ..count..), color = "#ef476f", linewidth = 1) +
+  theme_classic() +
+  theme(axis.title.x = element_text(size = 22),
+        axis.text.x = element_text(size = 16),
+        axis.title.y = element_text(size = 22),
+        axis.text.y = element_text(size = 16))
+
+# shapiro-wilk test for normality
+shapiro.test(comparison_df$certified_project_rate / comparison_df$pact_project_rate)
+
 comparison_df$acc_certified_control_bespoke_rate = comparison_df$acc_certified_control_rate * comparison_df$correction_coef
+comparison_df$acc_certified_control_bespoke_rate
 
 # ---- COMPUTE THE MEASURES ----
 # compute all six measures, only use four
@@ -66,6 +86,8 @@ comparison_df = comparison_df %>%
 median(comparison_df$pact_control_pact_project)
 median(comparison_df$certified_control_certified_project)
 median(comparison_df$acc_certified_control_bespoke_certified_project)
+
+
 # ---- RESHAPE DATA FOR PROCESSING ----
 # select the five newly named measures and pivot into long format
 comparison_long = comparison_df %>%
@@ -77,7 +99,7 @@ labels = c(
   pact_control_pact_project = "ACC QE Control\n- ACC QE Project",
   pact_control_certified_project = "ACC QE Control\n- Certified Project",
   acc_certified_control_certified_project = "ACC Certified Control\n- Certified Project",
-  acc_certified_control_bespoke_certified_project = "ACC to Bespoke Certified Control\n- Certified Project",
+  acc_certified_control_bespoke_certified_project = "Bespoke* Certified Control\n- Certified Project",
   certified_control_certified_project = "Certified Control\n- Certified Project"
 )
 
@@ -92,7 +114,7 @@ comparison_long = comparison_long %>%
 total_difference = median(comparison_df$certified_control_certified_project) - median(comparison_df$pact_control_pact_project)
 pact_control_certified_project_contribution = (median(comparison_df$pact_control_certified_project) - median(comparison_df$pact_control_pact_project)) / total_difference
 acc_certified_control_certified_project_contribution = (median(comparison_df$acc_certified_control_certified_project) - median(comparison_df$pact_control_certified_project)) / total_difference
-acc_certified_control_bespoke_certified_project_contribution = (median(comparison_df$acc_certified_control_bespoke_certified_project) - median(comparison_df$pact_control_certified_project)) / total_difference
+acc_certified_control_bespoke_certified_project_contribution = (median(comparison_df$acc_certified_control_bespoke_certified_project) - median(comparison_df$acc_certified_control_certified_project)) / total_difference
 certified_control_certified_project_contribution_one = (median(comparison_df$certified_control_certified_project) - median(comparison_df$acc_certified_control_bespoke_certified_project)) / total_difference 
 certified_control_certified_project_contribution_two = (median(comparison_df$certified_control_certified_project) - median(comparison_df$acc_certified_control_certified_project)) / total_difference
 
@@ -103,43 +125,109 @@ acc_certified_control_bespoke_certified_project_contribution = round(acc_certifi
 certified_control_certified_project_contribution_one = round(certified_control_certified_project_contribution_one, 2)
 certified_control_certified_project_contribution_two = round(certified_control_certified_project_contribution_two, 2)
 
-fig5a = ggplot(comparison_long, 
-       aes(x = measure_label, 
-           y = avoided_rate, 
-           colour = measure_label,
-           linetype = measure_label)) +
+
+# determine the median values for each measure
+
+medians = comparison_long %>%
+  group_by(measure_label) %>%
+  summarise(median_val = median(avoided_rate, na.rm = TRUE)) %>%
+  arrange(match(measure_label, c(
+    "ACC QE Control\n- ACC QE Project",
+    "ACC QE Control\n- Certified Project",
+    "ACC Certified Control\n- Certified Project",
+    "Bespoke* Certified Control\n- Certified Project",
+    "Certified Control\n- Certified Project"
+  )))
+
+# determine the net contribution of each measure
+
+medians$contribution = c(0, diff(medians$median_val, lag = 1))
+
+# determine the percentage contribution of each measure
+
+medians$percentage_contribution = round(medians$contribution / total_difference, 2) * 100
+
+# drop first row
+label_medians = medians[-1, ]
+
+# positions for difference labels
+label_data = data.frame(
+  x = c(1.5, 2.5, 3.5, 4.5),
+  y = (medians$median_val[-1] + medians$median_val[-nrow(medians)])/2,
+  label = sprintf("%+.0f%%", label_medians$percentage_contribution)
+)
+
+label_data$label_text = c("\nProject Area Remote Sensing", 
+                          "\nControl Area Selection",
+                          "\nControl Area Remote Sensing",
+                          "\n Ex Ante Modelling")
+
+# combine the label text with the contribution
+label_data$label = paste(label_data$label, label_data$label_text, sep = "")
+
+fig5 = ggplot(comparison_long, 
+                aes(x = measure_label, 
+                    y = avoided_rate, 
+                    colour = measure_label,
+                    linetype = measure_label)) +
+    annotate("segment", 
+           x = 1, xend = 2, 
+           y = medians$median_val[1], yend = medians$median_val[2],
+           linetype = "dotted", color = "black", linewidth = 0.5) +
+  annotate("segment", 
+           x = 2, xend = 3, 
+           y = medians$median_val[2], yend = medians$median_val[3],
+           linetype = "dotted", color = "black", linewidth = 0.5) +
+  annotate("segment", 
+           x = 3, xend = 4, 
+           y = medians$median_val[3], yend = medians$median_val[4],
+           linetype = "dotted", color = "black", linewidth = 0.5) +
+  annotate("segment", 
+           x = 4, xend = 5, 
+           y = medians$median_val[4], yend = medians$median_val[5],
+           linetype = "dotted", color = "black", linewidth = 0.5) +
+  
+  # Add difference labels using annotate()
+  annotate("text",
+           x = label_data$x,
+           y = label_data$y,
+           label = label_data$label,
+           color = "black", size = 2.8, vjust = 2) +
+  
+  # Original plot elements
   stat_summary(fun.data = function(y) {
     data.frame(
       y    = median(y, na.rm = TRUE),
       ymin = quantile(y, 0.25, na.rm = TRUE),
       ymax = quantile(y, 0.75, na.rm = TRUE)
     )
-  },
-  geom = "errorbar", width = 0.2, linewidth = 1,
+  }, geom = "errorbar", width = 0.2, linewidth = 1,
   position = position_dodge(width = 0.5)) +
   stat_summary(fun = median, geom = "crossbar", 
                width = 0.2, linewidth = 1,
                position = position_dodge(width = 0.5)) +
+  
+  # Rest of your original code...
   scale_y_continuous(labels = function(x) sprintf("%.1f", x)) +
   scale_colour_manual(values = c(
     "ACC QE Control\n- ACC QE Project"             = "#06d6a0",  
     "ACC QE Control\n- Certified Project"            = "#f77f00",  
     "ACC Certified Control\n- Certified Project"       = "#26547c",
-    "ACC to Bespoke Certified Control\n- Certified Project" = "#B6C7D6",
+    "Bespoke* Certified Control\n- Certified Project" = "#B6C7D6",
     "Certified Control\n- Certified Project"           = "#ef476f"
   )) +
   scale_linetype_manual(values = c(
     "ACC QE Control\n- ACC QE Project"             = "solid",  
     "ACC QE Control\n- Certified Project"            = "solid",  
     "ACC Certified Control\n- Certified Project"       = "solid",
-    "ACC to Bespoke Certified Control\n- Certified Project" = "solid",
+    "Bespoke* Certified Control\n- Certified Project" = "solid",
     "Certified Control\n- Certified Project"           = "solid"
   )) +
   scale_x_discrete(limits = c(
     "ACC QE Control\n- ACC QE Project",
     "ACC QE Control\n- Certified Project",
     "ACC Certified Control\n- Certified Project",
-    "ACC to Bespoke Certified Control\n- Certified Project",
+    "Bespoke* Certified Control\n- Certified Project",
     "Certified Control\n- Certified Project"
   )) +
   geom_hline(yintercept = median(comparison_df$pact_control_pact_project, na.rm = TRUE),
@@ -152,175 +240,35 @@ fig5a = ggplot(comparison_long,
         axis.text.y  = element_text(size = 13),
         axis.title.x = element_text(size = 22),
         axis.text.x = element_text(angle = 30, hjust = 1, size = 16),
-        legend.position = "none")
-fig5a
+        legend.position = "none") +
+  coord_cartesian(ylim = c(0, 1.5))
 p_labels = c("Combined Over-Crediting Effect **")
 
-fig5a = fig5a + geom_signif(comparisons = list(c("ACC QE Control\n- ACC QE Project",
-                                                 "Certified Control\n- Certified Project")),
-                            test = "wilcox.test",  # Wilcoxon test for comparing the distributions
-                            map_signif_level = FALSE,
-                            y_position = c(1.6, 1.0, 1.2, 1, 1.4),
-                            textsize = 5.4, 
-                            tip_length = 0.01,
-                            colour = "black",
-                            annotations = p_labels  
-)
-# set the width of the polygons
-poly_width = 0.3 
+# add significance bracket between the first and last measure
+fig5 = fig5 + 
+  geom_signif(comparisons = list(c("ACC QE Control\n- ACC QE Project",
+                                    "Certified Control\n- Certified Project")),
+              test = "wilcox.test",  # Wilcoxon test for comparing the distributions
+              map_signif_level = FALSE,
+              y_position = c(1.2),
+              textsize = 5.4, 
+              tip_length = 0.01,
+              colour = "black",
+              annotations = p_labels)
 
-bottom = median(comparison_df$pact_control_pact_project, na.rm = TRUE)
-top = median(comparison_df$certified_control_certified_project, na.rm = TRUE)
-range = top - bottom
+# add y axis label
+fig5 = fig5 + 
+  labs(y = "Avoided Deforestation Rate (%)") +
+  theme(axis.title.y = element_text(size = 22))
 
-# Create a transformation function
-to_percentage = function(y) {
-  (y - bottom) / range * 100
-}
-
-fig5b = ggplot(comparison_long, 
-                aes(x = measure_label, 
-                    y = avoided_rate, 
-                    colour = measure_label,
-                    linetype = measure_label)) +
-  geom_hline(yintercept = bottom,
-             linetype = "dashed", linewidth = 0.75, colour = "#06d6a0") +
-  geom_hline(yintercept = top,
-             linetype = "dashed", linewidth = 0.75, colour = "#ef476f") +
-  annotate("polygon",
-           x = c(1 - poly_width/2, 1 + poly_width/2,
-                 1 + poly_width/2, 1 - poly_width/2),
-           y = c(median(comparison_df$pact_control_pact_project, na.rm = TRUE),
-                 median(comparison_df$pact_control_pact_project, na.rm = TRUE),
-                 median(comparison_df$pact_control_certified_project, na.rm = TRUE),
-                 median(comparison_df$pact_control_certified_project, na.rm = TRUE)),
-           fill = "#f77f00") +
-  annotate("polygon",
-           x = c(2 - poly_width/2, 2 + poly_width/2,
-                 2 + poly_width/2, 2 - poly_width/2),
-           y = c(median(comparison_df$pact_control_pact_project, na.rm = TRUE),
-                 median(comparison_df$pact_control_pact_project, na.rm = TRUE),
-                 median(comparison_df$pact_control_certified_project, na.rm = TRUE),
-                 median(comparison_df$pact_control_certified_project, na.rm = TRUE)),
-           fill = "#f77f00") +
-  annotate("polygon",
-           x = c(2 - poly_width/2, 2,
-                 2, 2 - poly_width/2),
-           y = c(median(comparison_df$pact_control_certified_project, na.rm = TRUE),
-                 median(comparison_df$pact_control_certified_project, na.rm = TRUE),
-                 median(comparison_df$acc_certified_control_certified_project, na.rm = TRUE),
-                 median(comparison_df$acc_certified_control_certified_project, na.rm = TRUE)),
-           fill = "#26547c") +
-  annotate("polygon",
-           x = c(3 - poly_width/2, 3 + poly_width/2,
-                 3 + poly_width/2, 3 - poly_width/2),
-           y = c(median(comparison_df$pact_control_pact_project, na.rm = TRUE),
-                 median(comparison_df$pact_control_pact_project, na.rm = TRUE),
-                 median(comparison_df$pact_control_certified_project, na.rm = TRUE),
-                 median(comparison_df$pact_control_certified_project, na.rm = TRUE)),
-           fill = "#f77f00") +
-  annotate("polygon",
-           x = c(3, 3 + poly_width/2,
-                 3 + poly_width/2, 3),
-           y = c(median(comparison_df$pact_control_certified_project, na.rm = TRUE),
-                 median(comparison_df$pact_control_certified_project, na.rm = TRUE),
-                 median(comparison_df$acc_certified_control_bespoke_certified_project, na.rm = TRUE),
-                 median(comparison_df$acc_certified_control_bespoke_certified_project, na.rm = TRUE)),
-           fill = "#B6C7D6") +
-  annotate("polygon",
-           x = c(4 - poly_width/2, 4 + poly_width/2,
-                 4 + poly_width/2, 4 - poly_width/2),
-           y = c(median(comparison_df$pact_control_pact_project, na.rm = TRUE),
-                 median(comparison_df$pact_control_pact_project, na.rm = TRUE),
-                 median(comparison_df$pact_control_certified_project, na.rm = TRUE),
-                 median(comparison_df$pact_control_certified_project, na.rm = TRUE)),
-           fill = "#f77f00") +
-  annotate("polygon",
-           x = c(4 - poly_width/2, 4,
-                 4, 4 - poly_width/2),
-           y = c(median(comparison_df$pact_control_certified_project, na.rm = TRUE),
-                 median(comparison_df$pact_control_certified_project, na.rm = TRUE),
-                 median(comparison_df$acc_certified_control_certified_project, na.rm = TRUE),
-                 median(comparison_df$acc_certified_control_certified_project, na.rm = TRUE)),
-           fill = "#26547c") +
-  annotate("polygon",
-           x = c(4, 4 + poly_width/2,
-                 4 + poly_width/2, 4),
-           y = c(median(comparison_df$pact_control_certified_project, na.rm = TRUE),
-                 median(comparison_df$pact_control_certified_project, na.rm = TRUE),
-                 median(comparison_df$acc_certified_control_bespoke_certified_project, na.rm = TRUE),
-                 median(comparison_df$acc_certified_control_bespoke_certified_project, na.rm = TRUE)),
-           fill = "#B6C7D6") +
-  annotate("polygon",
-           x = c(4, 4 + poly_width/2,
-                 4 + poly_width/2, 4),
-           y = c(
-             median(comparison_df$acc_certified_control_bespoke_certified_project, na.rm = TRUE),
-             median(comparison_df$acc_certified_control_bespoke_certified_project, na.rm = TRUE),
-             median(comparison_df$acc_certified_control_certified_project, na.rm = TRUE),
-             median(comparison_df$acc_certified_control_certified_project, na.rm = TRUE)
-           ),
-           fill = "#ef476f") +
-  annotate("polygon",
-           x = c(4 - poly_width/2, 4 + poly_width/2,
-                 4 + poly_width/2, 4 - poly_width/2),
-           y = c(median(comparison_df$acc_certified_control_certified_project, na.rm = TRUE),
-                 median(comparison_df$acc_certified_control_certified_project, na.rm = TRUE),
-                 median(comparison_df$certified_control_certified_project, na.rm = TRUE),
-                 median(comparison_df$certified_control_certified_project, na.rm = TRUE)),
-           fill = "#ef476f") +
-  annotate("text", x = 1, y = median(comparison_df$pact_control_certified_project), label = paste0("Increase: +", pact_control_certified_project_contribution * 100, "%"),
-           size = 6, vjust = -0.5) +
-  annotate("text", x = 2, y = median(comparison_df$acc_certified_control_certified_project), label = paste0("Increase: +", acc_certified_control_certified_project_contribution * 100, "%"),
-           size = 6, vjust = -0.5) +
-  annotate("text", x = 3, y = median(comparison_df$acc_certified_control_bespoke_certified_project), label = paste0("Increase: +", acc_certified_control_bespoke_certified_project_contribution * 100, "%"),
-           size = 6, vjust = -0.5) +
-  annotate("text", x = 4, y = median(comparison_df$certified_control_certified_project), label = paste0("Increase: +", certified_control_certified_project_contribution_two * 100, "%\nto +", certified_control_certified_project_contribution_one * 100, "%"),
-           size = 6, vjust = -0.5) +
-  scale_x_discrete(limits = c(
-    "Bespoke Remote Sensing",
-    "Control Area Selection\n (measured by ACC)",
-    "Control Area Selection\n (ACC to Bespoke conversion)",
-    "Ex Ante Modelling"
-  )) +
-  xlab("Over-crediting mechanism") +
-  theme_classic() +
-  theme(axis.title.y = element_text(size = 22),
-        axis.text.y  = element_text(size = 13),
-        axis.title.x = element_text(size = 22),
-        axis.text.x = element_text(angle = 30, hjust = 1, size = 16),
-        legend.position = "none")
-
-# apply identical limits to both plots
-fig5a = fig5a + 
-  coord_cartesian(ylim = c(0, 1.5)) + 
-  ylab("Avoided deforestation (%/year)")
-
-fig5b = fig5b + 
-  coord_cartesian(ylim = c(0, 1.5)) +
-  ylab("Contribution (%)") +
-  scale_y_continuous(
-    labels = function(y) paste0(round(to_percentage(y), 0), "%"),
-    breaks = seq(bottom, top, length.out = 6)
-  )
-
-# combine plots with aligned axes
-fig5 = fig5a + fig5b + 
-  plot_layout(nrow = 1, widths = c(1.8, 1))  +
-  plot_annotation(tag_levels = "a") &
-  theme(plot.tag = element_text(size = 25))
-ggsave("pngs/fig5_raw.png", fig5, width = 20, height = 10, units = "in", dpi = 500)
-fig5
+# save the plot as a svg file
+ggsave("pngs/fig5_raw.svg", fig5, width = 10, height = 9, units = "in", dpi = 300)
 
 # ----- WILCOXON TESTS ----
 wilcox.test(comparison_df$certified_control_certified_project, comparison_df$pact_control_pact_project, paired = T, alternative = "greater")
 wilcox.test(comparison_df$pact_control_certified_project, comparison_df$pact_control_pact_project, paired = T, alternative = "greater")
 wilcox.test(comparison_df$acc_certified_control_certified_project, comparison_df$pact_control_certified_project, paired = T, alternative = "greater")
 wilcox.test(comparison_df$certified_control_certified_project, comparison_df$acc_certified_control_certified_project, paired = T, alternative = "greater")
-
-# ---- PAIRWISE MEDIAN DIFFERENCE ----
-median(comparison_df$pact_control_pact_project)
-median(comparison_df$certified_control_certified_project)
 
 
 
