@@ -390,7 +390,7 @@ s4b_plot = ggplot(plot_comparison_df, aes(x = variable, y = value, colour = vari
         axis.text.y  = element_text(size = 14),
         legend.position = "none")
                 
-p_label = paste("ACC Rate is Higher **")
+p_label = paste("ACC Rate is Lower **")
 
 s4b_plot = s4b_plot + 
   geom_signif(
