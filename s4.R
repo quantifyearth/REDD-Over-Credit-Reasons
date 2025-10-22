@@ -389,7 +389,20 @@ s4b_plot = ggplot(plot_comparison_df, aes(x = variable, y = value, colour = vari
         axis.text.x  = element_text(size = 18, colour = "black"),
         axis.text.y  = element_text(size = 14),
         legend.position = "none")
+                
+p_label = paste("ACC Rate is Higher **")
 
+s4b_plot = s4b_plot + 
+  geom_signif(
+    comparisons = list(c("acc_rate", "cert_rate")),
+    test = "wilcox.test",
+    map_signif_level = TRUE,
+    y_position = 3.2,
+    textsize = 6, 
+    colour = "black",
+    annotations = p_label
+  )
+                     
 # ---- COMBINE PLOTS INTO A PANEL ----
 
 s4a_plot = s4a_plot + labs(tag = "a", size = 20)
