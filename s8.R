@@ -10,7 +10,7 @@ library(weights)
 library(GGally)
 library(patchwork)
 
-# set theme to classic
+# set global theme
 theme_set(theme_classic())
 
 # statistical assessments
@@ -21,6 +21,7 @@ ag_2022_df = read.csv(file.path("csvs", "ag_2022_avoided_amounts.csv"))
 ag_2025_df = read.csv(file.path("csvs", "ag_2025_avoided_amounts.csv")) %>%
   select(ID = id, Avd_def = avoided_ha) %>%
   mutate(Avd_def = -Avd_def)  # reverse sign for avoided deforestation
+tang_2025_df = read.csv(file.path("csvs", "tang_2025_avoided_amounts.csv"))
 
 # pact assessments
 pact_v2_df = read.csv(file.path("csvs", "pact_2025_avoided_amounts.csv")) %>%
@@ -97,8 +98,14 @@ pact_v2_df = pact_v2_df %>%
   mutate(source = "PACTv2",
          label = "pactv2")
 
+# align tang 2025 assessments
+tang_2025_df = tang_2025_df %>%
+  select(ID = id, Start = start, End = end, Avd_def = avoided_def) %>%
+  mutate(source = "tang_2025",
+         label = "tang 25")
+
 # combine all datasets into one
-combined_df = rbind(tw_2020_df, tw_2023_df, tw_2024_df, ag_2022_df, ag_2025_df, pact_v2_df, vcs_df) %>%
+combined_df = rbind(tw_2020_df, tw_2023_df, tw_2024_df, ag_2022_df, ag_2025_df, tang_2025_df, pact_v2_df, vcs_df) %>%
   mutate(ID = as.factor(ID)) %>%
   mutate(avd_def_yr = Avd_def / (End - Start))
 
@@ -120,22 +127,41 @@ combined_df = combined_df %>%
 combined_df = combined_df %>%
   filter(method %in% c("VM0006", "VM0007", "VM0009", "VM0015"))
 
+# write combined dataset to csv
+write.csv(combined_df, file.path("csvs/certified_qem_combined_totals.csv"))
+
 # align the datasets for certified vs. statistical assessments
 cf_vcs_comp_def_df = combined_df %>%
-  select(ID, avd_def_yr, source) %>%
+  select(ID, avd_def_yr, source, country) %>%
   group_by(ID) %>%
   pivot_wider(names_from = source, values_from = avd_def_yr) %>%
   filter(!is.na(VERRA)) %>%
-  pivot_longer(cols = c(-ID, -VERRA), names_to = "cf_source", values_to = "cf_avd") %>%
+  pivot_longer(cols = c(-ID, -VERRA, -country), names_to = "cf_source", values_to = "cf_avd") %>%
   filter(!all(is.na(cf_avd))) %>%
   ungroup() %>%
   filter(VERRA > 0)
 
+# add in verra method
+cf_vcs_comp_def_df = cf_vcs_comp_def_df %>%
+  left_join(all_projects_df %>% mutate(ID = as.factor(ID)) %>%
+              select(ID, method = method), by = "ID") %>%
+  mutate(cf_source = as.factor(cf_source))
+
 cf_vcs_comp_def_df$cf_source = as.factor(cf_vcs_comp_def_df$cf_source)
 
-# join on country and methodology
-cf_vcs_comp_def_df = cf_vcs_comp_def_df %>%
-  left_join(all_projects_df %>% mutate(ID = as.factor(ID)), by = "ID")
+# table of the number of projects per source wher cf_avd is not na
+cf_vcs_comp_def_df %>%
+  group_by(cf_source) %>%
+  # sum up the number iof projects per source (don't add if the cf_avd is zero)
+  summarise(n = sum(!is.na(cf_avd))) %>%
+  arrange(desc(n))
+
+# table of the number of projects per method
+cf_vcs_comp_def_df %>%
+  group_by(method) %>%
+  # sum up the number of unique projects per method
+  summarise(n = n_distinct(ID)) %>%
+  arrange(desc(n))
 
 # calculate summary statistics for each project
 cf_vcs_avd_comp_mean_df = cf_vcs_comp_def_df %>%
@@ -151,22 +177,19 @@ cf_vcs_avd_comp_mean_df = cf_vcs_comp_def_df %>%
     cf_avd_ci_min = cf_avd_mean - cf_avd_ci,
     cf_avd_ci_max = cf_avd_mean + cf_avd_ci,
     VERRA = VERRA[1],
-    method = method[1],
     country = country[1]
   )
 
+
 cf_vcs_avd_comp_mean_df$cf_Aadj_mean = cf_vcs_avd_comp_mean_df$VERRA / cf_vcs_avd_comp_mean_df$cf_avd_mean
+proportions_df = cf_vcs_avd_comp_mean_df$cf_avd_mean / cf_vcs_avd_comp_mean_df$VERRA
+proportions_df = ifelse(proportions_df < 0, 0, proportions_df)
+mean_proportion = mean(proportions_df, na.rm = TRUE)
 
 # prepare data for plotting fig 2a (line data)
 new_dat_df = data.frame(cf_avd_mean = seq(from = min(cf_vcs_avd_comp_mean_df$cf_avd_min),
                                           to = max(cf_vcs_avd_comp_mean_df$cf_avd_max), by = 1)) %>%
   mutate(VERRA = cf_avd_mean)
-
-# calculate proportions of certified to statistical assessments
-proportions_df = cf_vcs_avd_comp_mean_df$cf_avd_mean / cf_vcs_avd_comp_mean_df$VERRA
-proportions_df = ifelse(proportions_df < 0, 0, proportions_df)
-mean_proportion = mean(proportions_df, na.rm = TRUE)
-
 
 # inverse hyperbolic sine transformation function
 asinh_trans = function(x) asinh(x)
@@ -174,7 +197,7 @@ asinh_inv = function(x) sinh(x)
 
 # plot fig s8a (scatter and line plot)
 s8a_plot = ggplot(data = cf_vcs_avd_comp_mean_df, 
-                   aes(y = VERRA, x = cf_avd_mean)) +
+                  aes(y = VERRA, x = cf_avd_mean)) +
   geom_line(data = new_dat_df, 
             aes(x = cf_avd_mean, y = VERRA), 
             col = "darkred", linetype = 2, linewidth = 0.75) +
@@ -205,7 +228,7 @@ s8a_plot = ggplot(data = cf_vcs_avd_comp_mean_df,
   scale_color_manual(
     # 9 distinct colors 
     values = c("#E41A1C", "#377EB8", "#4DAF4A", "#FF7F00", "#FFFF33", 
-               "#A65628", "#984EA3", "#999999", "#D55E00"),
+               "#A65628", "#984EA3", "#999999", "#D55E00", "#66C2A5"),
     name = "Country"
   ) +
   labs(
@@ -259,7 +282,7 @@ s8b_plot = cf_vcs_avd_comp_mean_df %>%
   scale_y_continuous(trans = scales::trans_new("asinh", asinh_trans, asinh_inv),
                      breaks = c(1,10,100,1000)) +
   scale_color_manual(values = c("#E41A1C", "#377EB8", "#4DAF4A", "#FF7F00", "#FFFF33", 
-                                    "#A65628", "#984EA3", "#999999", "#D55E00"),
+                                "#A65628", "#984EA3", "#999999", "#D55E00", "#66C2A5"),
                      name = "Country") +
   theme(axis.line = element_blank(),
         axis.text = element_text(size = 12),
@@ -292,5 +315,4 @@ madagascar_mean = sum(madagascar_df$VERRA) / sum(madagascar_df$cf_avd_mean)
 
 # print madagascar mean
 print(paste("Madagascar mean additionality ratio:", round(madagascar_mean, 2)))
-
 
