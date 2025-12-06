@@ -39,46 +39,88 @@ end_years_df = read.csv("csvs/evaluation_end_years.csv")
 # compute the acc deforestation rate for each project
 deforestation_list = list()
 
+# load end year data for each project
+end_years_df = read.csv("csvs/evaluation_end_years.csv")
+
+# compute the acc deforestation rate for each project
+deforestation_list = list()
+
 for (file in acc_files) {
   # read the project area (k) parquet file and convert to tibble
-  df = read_parquet(file) %>% 
-    as_tibble() %>% 
-    # select only the columns with land use class data
-    select(starts_with("luc"))
+  df = read_parquet(file) %>% as_tibble()
+  
   # extract the project id from the file name
   project_id = as.numeric(str_extract(basename(file), "\\d+"))
-  # convert data to long format for determining undisturbed forest sums
-  df_long = df %>% pivot_longer(
-    cols = everything(),
-    names_to = "year",
-    values_to = "luc",
-    names_pattern = "luc_(\\d+)"
-  ) %>% mutate(year = as.integer(year))
-  # count the number of undisturbed forest pixels per year
-  yearly_counts = df_long %>%
-    group_by(year) %>%
-    summarise(forest = sum(luc == 1, na.rm = TRUE), .groups = "drop")
   
-  # discard the first 10 rows (years)
-  yearly_counts = yearly_counts[-(1:10), ]
-  
-  # filter deforestation rate data up to the project's evaluation end year
+  # get start year from column 20
+  start_year_col = names(df)[20]
+  start_year = as.numeric(str_extract(start_year_col, "\\d+"))
+  print(paste("Processing project", project_id, "from", start_year_col))
+  # get end year for this project
   if (project_id %in% end_years_df$project_no) {
-    # extract the project's end year
     project_end_year = end_years_df %>%
       filter(project_no == project_id) %>% pull(end_year)
-    # find the average deforestation rate up to the project's evaluation end year
-    deforestation_list[[basename(file)]] = yearly_counts %>%
-      filter(year <= project_end_year) %>%
-      arrange(year) %>%
-      summarise(project_no = project_id,
-                acc_rate = (1 - (last(forest) / first(forest))^(1 / n())) * 100, .groups = "drop")
+    
+    # find end column
+    end_col = paste0("luc_", project_end_year)
+    
+    print(paste("Project", project_id, "end year column:", end_col))
+    
+    if (end_col %in% names(df)) {
+      # calculate start forest pixels (classes 1 and 4)
+      start_1_pixels = sum(df[[start_year_col]] == 1, na.rm = TRUE)
+      start_forest_pixels = start_1_pixels
+      print(paste("Project", project_id, "start forest pixels:", start_forest_pixels))
+      
+      # count 1s that became 2, 3, or 4
+      lost_1_to_other = 0
+      if (start_1_pixels > 0) {
+        # pixels that were 1 at start
+        pixels_start_1 = which(df[[start_year_col]] == 1)
+        # how many became 2, 3, or 4
+        lost_1_to_other = sum(df[pixels_start_1, end_col, drop = TRUE] %in% c(2, 3, 4), na.rm = TRUE)
+        print(paste("Project", project_id, "lost 1 to other pixels:", lost_1_to_other))
+      }
+      
+      total_lost_pixels = lost_1_to_other
+      end_forest_pixels = start_forest_pixels - total_lost_pixels
+      print(paste("Project", project_id, "end forest pixels:", end_forest_pixels))
+      
+      # proportions
+      total_pixels = nrow(df)
+      start_proportion = start_forest_pixels / total_pixels
+      end_proportion = end_forest_pixels / total_pixels
+      
+      # period years
+      period_years = project_end_year - start_year
+      
+      # deforestation rate (using proportions)
+      if (start_proportion > 0 && end_proportion > 0 && period_years > 0) {
+        acc_rate = (1 - (end_forest_pixels / start_forest_pixels)^(1 / period_years)) * 100
+      } else {
+        acc_rate = NA_real_
+      }
+      print(paste("Project", project_id, "ACC deforestation rate:", round(acc_rate, 4), "%/year"))
+      
+      # results
+      deforestation_list[[basename(file)]] = tibble(
+        project_no = project_id,
+        acc_rate = acc_rate,
+        start_proportion = start_proportion,
+        end_proportion = end_proportion,
+        period_years = period_years,
+        start_forest_pixels = start_forest_pixels,
+        end_forest_pixels = end_forest_pixels,
+        lost_1_to_other = lost_1_to_other,
+        total_lost_pixels = total_lost_pixels
+      )
+    }
   }
 }
 
 # unravel the list of tibbles into a single tibble
 deforestation_rate_df = bind_rows(deforestation_list) %>%
-  write_csv("csvs/acc_project_area_rates.csv")
+  write_csv("csvs/acc_pact_project_rates.csv")
 
 # ---- LOAD PROJECT GEOJSON FILES AND COMPUTE AREAS ----
 geojson_df = list.files("geojsons/project_area_geojsons", full.names = TRUE) %>%
@@ -109,7 +151,7 @@ cert_df = cert_df %>%
   ungroup() %>%
   drop_na()
 
-# compute the mean self-reported deforestation rates
+# compute the compound self-reported deforestation rates
 cert_df = cert_df %>%
   group_by(project_no) %>%
   arrange(year) %>%
@@ -125,6 +167,32 @@ cert_df = cert_df %>%
   left_join(eval_periods, by = "project_no")
 cert_df$compound = (1 - (cert_df$end / cert_df$start)^(1 / cert_df$period)) * 100
 cert_df = cert_df %>% rename(cert_rate = compound) 
+write_csv(cert_df, "csvs/certified_project_rates.csv")
+
+# ---- PREPARE FIG 5 CERTIFIED CONTROL RATE DATAFRAME ----
+# load the certified rates csv
+cert_control_df = read.csv("csvs/certified_avoided_amounts.csv") %>%
+  select(ID, Start, End, total.bsl.def) %>%
+  rename(project_no = ID,
+         start = Start,
+         end = End,
+         control_ha = total.bsl.def) %>%
+  # add the hectarage of project areas
+  left_join(geojson_df, by = "project_no") %>%
+  # add the proportion of undisturbed
+  left_join(undisturbed_df, by = "project_no") %>%
+  # work out the amount of undisturbed
+  mutate(area_undisturbed = area_ha * (undisturbed_percent / 100)) %>%
+  # remove na rows
+  drop_na()
+
+cert_control_df$period = cert_control_df$end - cert_control_df$start
+cert_control_df$end_ha = cert_control_df$area_undisturbed - cert_control_df$control_ha
+cert_control_df$control_rate = (1 - (cert_control_df$end_ha / cert_control_df$area_undisturbed)^(1 / cert_control_df$period)) * 100
+cert_control_df = cert_control_df %>%
+  select(project_no, control_rate) %>%
+  rename(rate = control_rate) %>%
+  write_csv("csvs/certified_control_rates.csv")
 # ---- SCATTER PLOT (FIGURE 3A) ----
 
 # join the deforestation rates and compute the difference
@@ -189,7 +257,7 @@ fig3b_plot = ggplot(plot_comparison_df, aes(x = variable, y = value, colour = va
         legend.position = "none")
 
 p_value = wilcox.test(comparison_df$acc_rate, comparison_df$cert_rate, paired = TRUE)$p.value
-p_label = paste("**")
+p_label = paste("***")
 
 # create the plot with significance annotation
 fig3b_plot = fig3b_plot + 

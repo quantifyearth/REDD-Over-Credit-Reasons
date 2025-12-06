@@ -8,9 +8,12 @@ library(ggpattern)
 
 # 1. read pact data (previously acc qem data)
 pact_control_df = read_csv("csvs/acc_pact_control_rates.csv") %>%
-  rename(pact_control_rate = rate)
+  rename(pact_control_rate = rate,
+         project_no = project) %>%
+  select(project_no, pact_control_rate)
 pact_project_df = read_csv("csvs/acc_pact_project_rates.csv") %>%
-  rename(pact_project_rate = rate)
+  rename(pact_project_rate = acc_rate) %>%
+  select(project_no, pact_project_rate)
 
 # join pact control and project data
 pact_df = pact_control_df %>%
@@ -20,11 +23,14 @@ pact_df = pact_control_df %>%
 certified_control_df = read_csv("csvs/certified_control_rates.csv") %>%
   rename(certified_control_rate = rate)
 certified_project_df = read_csv("csvs/certified_project_rates.csv") %>%
-  rename(certified_project_rate = rate)
+  rename(certified_project_rate = cert_rate) %>%
+  select(project_no, certified_project_rate)
 
 # 3. read acc certified control data (for additional measures)
 acc_certified_control_df = read_csv("csvs/acc_certified_control_rates.csv") %>%
-  rename(acc_certified_control_rate = rate)
+  rename(acc_certified_control_rate = rate,
+         project_no = project) %>%
+  select(project_no, acc_certified_control_rate)
 
 # 4. join all data by project_no
 comparison_df = acc_certified_control_df %>%
@@ -53,7 +59,6 @@ ggplot(comparison_df, aes(x = certified_project_rate / pact_project_rate)) +
 shapiro.test(comparison_df$certified_project_rate / comparison_df$pact_project_rate)
 
 comparison_df$acc_certified_control_bespoke_rate = comparison_df$acc_certified_control_rate * comparison_df$correction_coef
-comparison_df$acc_certified_control_bespoke_rate
 
 # ---- COMPUTE THE MEASURES ----
 # compute all six measures, only use four
@@ -264,6 +269,10 @@ fig5 = fig5 +
 # save the plot as a svg file
 ggsave("pngs/fig5_raw.svg", fig5, width = 10, height = 9, units = "in", dpi = 300)
 
+# also save as png
+ggsave("pngs/fig5_raw.png", fig5, width = 10, height = 9, units = "in", dpi = 300)
+
+       
 # ----- WILCOXON TESTS ----
 wilcox.test(comparison_df$certified_control_certified_project, comparison_df$pact_control_pact_project, paired = T, alternative = "greater")
 wilcox.test(comparison_df$pact_control_certified_project, comparison_df$pact_control_pact_project, paired = T, alternative = "greater")

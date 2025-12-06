@@ -18,7 +18,11 @@ names(pact_control_df_list) = pact_matching_paths %>%
   str_remove("\\.parquet$")
 
 # extract project 958 for example
-pact_control_df = pact_control_df_list[["958"]]
+pact_control_df = pact_control_df_list[["958"]]#
+
+# determine the proportion of rows with 1 in luc_2010
+pact_control_df %>%
+  summarise(proportion_undisturbed_2010 = mean(luc_2010 == 1, na.rm = TRUE))
 
 # ---- LOAD CERTIFIED CONTROL AREA PARQUET FILES ----
 certified_control_paths = list.files("parquets/acc_certified_control_parquets", full.names = TRUE)
@@ -32,6 +36,11 @@ names(certified_control_df_list) = certified_control_paths %>%
 
 # extract project 958 for example
 certified_control_df = certified_control_df_list[["958"]]
+
+# determine the proportion of rows with 1 in luc_2001
+certified_control_df %>%
+  summarise(proportion_undisturbed_2001 = mean(luc_2001 == 1, na.rm = TRUE))
+  
 
 # ---- LOAD PROJECT AREA PARQUET FILES ----
 project_area_df_list = map(pact_matching_paths, ~ {
@@ -266,10 +275,9 @@ smd_plot = ggplot(smd_df, aes(x = smd, y = variable, colour = type)) +
         legend.position = "none")
 
 # ---- DEFORESTATION RATES ----
-deforestation_rate = function(parquet_folder,
-                              end_years_path = '',
-                              pact = FALSE,
-                              project = FALSE) {
+calculate_transition_rates = function(parquet_folder,
+                                      end_years_path = '',
+                                      pact = FALSE) {
   parquet_file_paths = list.files(parquet_folder, full.names = TRUE)
   df_list = lapply(parquet_file_paths, function(file_path) {
     tryCatch({
@@ -279,137 +287,165 @@ deforestation_rate = function(parquet_folder,
       NULL
     })
   })
+  
   # name list elements by the file basename
   names(df_list) = basename(parquet_file_paths)
   # remove any files that could not be read
   df_list = df_list[!sapply(df_list, is.null)]
   
-  # column selection based on pact and project booleans
-  df_list = lapply(df_list, function(df_tbl) {
-    # for pact files the following
-    if (pact) {
-      if (project) {
-        # for project files, select and rename columns starting with "k_"
-        df_tbl = df_tbl %>%
-          select(starts_with("k_")) %>%
-          rename_with(~ str_remove(., "k_"))
-      } else {
-        # otherwise, use columns starting with "s_"
-        df_tbl = df_tbl %>%
-          select(starts_with("s_")) %>%
-          rename_with(~ str_remove(., "s_"))
-      }
-      # after the above, select the luc columns and remove the first 9 (if they exist)
+  # Function to calculate transition rates for a single project
+  calculate_project_transitions = function(df_tbl, file_name, is_pact = FALSE, end_years_df = NULL) {
+    # Extract project number
+    proj_no = str_extract(file_name, "\\d+")
+    
+    # Determine relevant columns based on file type
+    if (is_pact) {
+      # For pact files (controls), use s_ columns
+      df_tbl = df_tbl %>%
+        select(starts_with("s_")) %>%
+        rename_with(~ str_remove(., "s_"))
+      # Select luc columns and remove first 9 if they exist
       df_tbl = df_tbl %>% 
         select(starts_with("luc"))
       if(ncol(df_tbl) > 9){
         df_tbl = df_tbl %>% select(-c(1:9))
       }
     } else {
-      # if not a pact file (i.e. an acc certified), just select luc columns
+      # For certified control, just select luc columns
       df_tbl = df_tbl %>% select(starts_with("luc"))
     }
-    return(df_tbl)
-  })
-  
-  # pivot each dataframe to long format and compute yearly land cover percentages
-  df_list = lapply(df_list, function(df_tbl) {
-    df_long_tbl = df_tbl %>% 
-      pivot_longer(
-        cols = everything(),
-        names_to = "year",
-        values_to = "luc",
-        names_pattern = "luc_(\\d+)"
-      ) %>% 
-      mutate(year = as.integer(year))
     
-    yearly_counts_tbl = df_long_tbl %>%
-      group_by(year) %>%
-      summarise(
-        Undisturbed = sum(luc == 1, na.rm = TRUE) / n(),
-        Degraded    = sum(luc == 2, na.rm = TRUE) / n(),
-        Deforested  = sum(luc == 3, na.rm = TRUE) / n(),
-        Reforested  = sum(luc == 4, na.rm = TRUE) / n(),
-        Water       = sum(luc == 5, na.rm = TRUE) / n(),
-        Other       = sum(luc == 6, na.rm = TRUE) / n(),
-        .groups     = "drop"
-      ) %>%
-      arrange(year)
+    # Determine start and end years
+    # Get all year columns
+    year_cols = names(df_tbl)
+    years = as.numeric(str_extract(year_cols, "\\d+"))
     
-    return(yearly_counts_tbl)
-  })
-  
-  
-  # summarise the deforestation rate by project use end years if pact
-  if (pact) {
-    # read the end years CSV
-    end_years_df = read.csv(end_years_path, stringsAsFactors = FALSE)
-    
-    # use mapply to process each element along with its name
-    summarized_list = mapply(function(df_tbl, file_name) {
-      # extract project number from the file name
-      proj_no = str_extract(file_name, "\\d+")
-      if (!proj_no %in% as.character(end_years_df$project_no)) {
-        return(NULL)
-      } else {
-        # look up the project's end year
-        project_end_year = end_years_df %>%
+    # No special "project" handling anymore; use the same approach for all files
+    if (is_pact && !is.null(end_years_df)) {
+      if (proj_no %in% as.character(end_years_df$project_no)) {
+        end_year = end_years_df %>%
           filter(project_no == proj_no) %>%
           pull(end_year) %>%
           as.numeric()
-        result = df_tbl %>%
-          filter(year <= project_end_year) %>%
-          arrange(year) %>%
-          summarise(project_no = as.numeric(proj_no),
-                    rate = (1 - (last(Undisturbed) / first(Undisturbed))^(1 / n())) * 100,
-                    .groups = "drop")
-        return(result)
+        # Filter to include only years <= end_year
+        keep_cols = year_cols[years <= end_year]
+        df_tbl = df_tbl %>% select(all_of(keep_cols))
+        years = years[years <= end_year]
+      } else {
+        return(NULL)
       }
-    }, df_list, names(df_list), SIMPLIFY = FALSE)
-  } else {
-    summarized_list = mapply(function(df_tbl, file_name) {
-      proj_no = str_extract(file_name, "\\d+")
-      result = df_tbl %>%
-        arrange(year) %>%
-        summarise(project_no = as.numeric(proj_no),
-                  rate = (1 - (last(Undisturbed) / first(Undisturbed))^(1 / n())) * 100,
-                  .groups = "drop")
-      return(result)
-    }, df_list, names(df_list), SIMPLIFY = FALSE)
+    }
+    
+    if (length(years) < 2) {
+      return(NULL)
+    }
+    
+    start_year = min(years)
+    end_year = max(years)
+    n_years = end_year - start_year
+    
+    # Get start and end column names
+    start_col = paste0("luc_", start_year)
+    end_col = paste0("luc_", end_year)
+    
+    if (!(start_col %in% names(df_tbl)) || !(end_col %in% names(df_tbl))) {
+      return(NULL)
+    }
+    
+    # For all files, use simpler approach
+    # Find pixels that were forest (1) at start
+    forest_start_indices = which(df_tbl[[start_col]] %in% c(1))
+    forest_start_count = length(forest_start_indices)
+    
+    # Count lost pixels
+    lost_pixels = 0
+    
+    if (forest_start_count > 0) {
+      for (idx in forest_start_indices) {
+        start_class = df_tbl[[start_col]][idx]
+        end_class = df_tbl[[end_col]][idx]
+        
+        if (start_class == 1 && end_class %in% c(2, 3, 4)) {
+          lost_pixels = lost_pixels + 1
+        }
+      }
+    }
+    
+    forest_end_pixels = forest_start_count - lost_pixels
+    
+    # Calculate rate
+    if (forest_start_count > 0 && forest_end_pixels > 0 && n_years > 0) {
+      acc_rate = (1 - (forest_end_pixels / forest_start_count)^(1 / n_years)) * 100
+    } else if (forest_start_count > 0 && forest_end_pixels == 0) {
+      acc_rate = 100
+    } else {
+      acc_rate = NA_real_
+    }
+    
+    result = tibble(
+      project = as.numeric(proj_no),
+      start_year = start_year,
+      end_year = end_year,
+      period_years = n_years,
+      total_pixels = nrow(df_tbl),
+      forest_start_pixels = forest_start_count,
+      forest_end_pixels = forest_end_pixels,
+      lost_pixels = lost_pixels,
+      acc_deforestation_rate = acc_rate
+    )
+    
+    return(result)
   }
   
-  summarized_list = summarized_list[!sapply(summarized_list, is.null)]
+  # Read end years if needed for pact files
+  if (pact) {
+    end_years_df = read.csv(end_years_path, stringsAsFactors = FALSE)
+  } else {
+    end_years_df = NULL
+  }
   
-  # combine all processed dataframes into one tibble
-  combined_rate_tbl = bind_rows(summarized_list) %>%
-    select(project_no, rate)
+  # Apply function to all projects
+  transitions_list = mapply(
+    calculate_project_transitions,
+    df_list,
+    names(df_list),
+    MoreArgs = list(
+      is_pact = pact,
+      end_years_df = end_years_df
+    ),
+    SIMPLIFY = FALSE
+  )
   
-  return(combined_rate_tbl)
+  # Remove NULL results
+  transitions_list = transitions_list[!sapply(transitions_list, is.null)]
+  
+  # Combine all results
+  combined_transitions_tbl = bind_rows(transitions_list)
+  
+  return(combined_transitions_tbl)
 }
-
 # ---- JOIN CERTIFIED AND ACC DEFORESTATION RATES ----
 
-certified_df = deforestation_rate("parquets/acc_certified_control_parquets") %>% 
+certified_df = calculate_transition_rates("parquets/acc_certified_control_parquets") %>%
   # save as csv
+  rename(rate = acc_deforestation_rate) %>%
   write_csv("csvs/acc_certified_control_rates.csv") %>%
-  rename(certified_rate = rate)
+  rename(certified_rate = rate) %>%
+  select(project, certified_rate)
 
-pact_df = deforestation_rate("parquets/acc_pact_matching_parquets",
+pact_df = calculate_transition_rates("parquets/acc_pact_matching_parquets",
                              "csvs/evaluation_end_years.csv",
                              TRUE) %>%
-  # save as csv
+  rename(rate = acc_deforestation_rate) %>%
   write_csv("csvs/acc_pact_control_rates.csv") %>%
-  rename(qem_rate = rate)
+  rename(acc_rate = rate) %>%
+  select(project, acc_rate)
 
-pact_project_df = deforestation_rate("parquets/acc_pact_matching_parquets",
-                                     "csvs/evaluation_end_years.csv",
-                                     TRUE,
-                                     TRUE) %>%
-  # save as csv
-  write_csv("csvs/acc_pact_project_rates.csv")
 
 control_areas_df = left_join(certified_df, pact_df,
-                             by = "project_no")
+                             by = "project") %>%
+  rename(project_no = project,
+         qem_rate = acc_rate)
 
 # ---- RESHAPE DATA FOR PLOTTING ----
 plot_control_areas_df = control_areas_df %>% 
