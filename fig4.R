@@ -20,9 +20,9 @@ names(pact_control_df_list) = pact_matching_paths %>%
 # extract project 958 for example
 pact_control_df = pact_control_df_list[["958"]]#
 
-# determine the proportion of rows with 1 in luc_2010
+# determine the proportion of rows with 1 or 4 or 2 luc_2010
 pact_control_df %>%
-  summarise(proportion_undisturbed_2010 = mean(luc_2010 %in% c(1,4), na.rm = TRUE))
+  summarise(proportion_undisturbed_2010 = mean(luc_2010 %in% c(1,4,2), na.rm = TRUE))
 
 # ---- LOAD CERTIFIED CONTROL AREA PARQUET FILES ----
 certified_control_paths = list.files("parquets/acc_certified_control_parquets", full.names = TRUE)
@@ -37,9 +37,9 @@ names(certified_control_df_list) = certified_control_paths %>%
 # extract project 958 for example
 certified_control_df = certified_control_df_list[["958"]]
 
-# determine the proportion of rows with 1 or 4 in luc_2001
+# determine the proportion of rows with 1 or 4 or 2 in luc_2001
 certified_control_df %>%
-  summarise(proportion_undisturbed_2001 = mean(luc_2001 %in% c(1,4), na.rm = TRUE))
+  summarise(proportion_undisturbed_2001 = mean(luc_2001 %in% c(1,4,2), na.rm = TRUE))
   
 
 # ---- LOAD PROJECT AREA PARQUET FILES ----
@@ -349,13 +349,15 @@ calculate_transition_rates = function(parquet_folder,
     
     # For all files, use simpler approach
     # Find pixels that were forest (1) at start
-    forest_start_indices = which(df_tbl[[start_col]] %in% c(1, 4))
+    forest_start_indices = which(df_tbl[[start_col]] %in% c(1, 4, 2))
     forest_start_count = length(forest_start_indices)
     
     # Count lost pixels
     lost_pixels = 0
     loss_1_to_others = 0
     loss_4_to_3 = 0
+    loss_2_to_others = 0
+    
     
     
     if (forest_start_count > 0) {
@@ -369,8 +371,11 @@ calculate_transition_rates = function(parquet_folder,
         } else if (start_class == 4 && end_class %in% c(3)) {
           loss_4_to_3 = loss_4_to_3 + 1
           lost_pixels = lost_pixels + 1
+        } else if (start_class == 2 && end_class %in% c(3, 4)) {
+          loss_2_to_others = loss_2_to_others + 1
+          lost_pixels = lost_pixels + 1
+        }
       }
-    }
     }
     
     forest_end_pixels = forest_start_count - lost_pixels
@@ -395,6 +400,7 @@ calculate_transition_rates = function(parquet_folder,
       lost_pixels = lost_pixels,
       loss_1_to_others = loss_1_to_others,
       loss_4_to_3 = loss_4_to_3,
+      loss_2_to_others = loss_2_to_others,
       acc_deforestation_rate = acc_rate
     )
     

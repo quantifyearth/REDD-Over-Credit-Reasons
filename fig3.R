@@ -18,7 +18,7 @@ for (file in acc_files) {
   # read the project area (k) parquet file and convert to tibble
   df = read_parquet(file) %>% as_tibble()
   # compute the percentage of undisturbed forest at project start year
-  percent_undisturbed = mean(df[[20]] %in% c(1,4), na.rm = TRUE) * 100
+  percent_undisturbed = mean(df[[20]] %in% c(1,2,4), na.rm = TRUE) * 100
   # extract the project id from the file name
   project_id = as.numeric(gsub("_k.parquet", "", basename(file)))
   # store the project id and undisturbed percentage in a tibble
@@ -67,9 +67,10 @@ for (file in acc_files) {
     print(paste("Project", project_id, "end year column:", end_col))
     
     if (end_col %in% names(df)) {
-      # calculate start forest pixels (classes 1 and 4)
+      # calculate start forest pixels (classes 1 and 4 and 2)
       start_1_pixels = sum(df[[start_year_col]] == 1, na.rm = TRUE)
       start_4_pixels = sum(df[[start_year_col]] == 4, na.rm = TRUE)
+      start_2_pixels = sum(df[[start_year_col]] == 2, na.rm = TRUE)
       start_forest_pixels = start_1_pixels + start_4_pixels
       print(paste("Project", project_id, "start forest pixels:", start_forest_pixels))
       
@@ -91,8 +92,16 @@ for (file in acc_files) {
         lost_4_to_3 = sum(df[pixels_start_4, end_col, drop = TRUE] == 3, na.rm = TRUE)
         print(paste("Project", project_id, "lost 4 to 3 pixels:", lost_4_to_3))
       }
+      lost_2_to_other = 0
+      if (start_2_pixels > 0) {
+        # pixels that were 2 at start
+        pixels_start_2 = which(df[[start_year_col]] == 2)
+        # how many became 3 or 4
+        lost_2_to_other = sum(df[pixels_start_2, end_col, drop = TRUE] %in% c(3, 4), na.rm = TRUE)
+        print(paste("Project", project_id, "lost 2 to other pixels:", lost_2_to_other))
+      }
       
-      total_lost_pixels = lost_1_to_other + lost_4_to_3
+      total_lost_pixels = lost_1_to_other + lost_4_to_3 + lost_2_to_other
       print(paste("Project", project_id, "total lost forest pixels:", total_lost_pixels))
       end_forest_pixels = start_forest_pixels - total_lost_pixels
       print(paste("Project", project_id, "end forest pixels:", end_forest_pixels))
@@ -123,6 +132,7 @@ for (file in acc_files) {
         start_forest_pixels = start_forest_pixels,
         end_forest_pixels = end_forest_pixels,
         lost_1_to_other = lost_1_to_other,
+        lost_2_to_other = lost_2_to_other,
         lost_4_to_3 = lost_4_to_3,
         total_lost_pixels = total_lost_pixels
       )
