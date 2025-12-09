@@ -19,6 +19,8 @@ for (file in acc_files) {
   df = read_parquet(file) %>% as_tibble()
   # compute the percentage of undisturbed forest at project start year
   percent_undisturbed = mean(df[[20]] == 1, na.rm = TRUE) * 100
+  # print col name being used
+  print(paste("Processing file:", basename(file), "using column:", names(df)[20]))
   # extract the project id from the file name
   project_id = as.numeric(gsub("_k.parquet", "", basename(file)))
   # store the project id and undisturbed percentage in a tibble
@@ -55,7 +57,9 @@ for (file in acc_files) {
   # get start year from column 20
   start_year_col = names(df)[20]
   start_year = as.numeric(str_extract(start_year_col, "\\d+"))
-  print(paste("Processing project", project_id, "from", start_year_col))
+  print(paste("Processing project", project_id, "using years from", start_year_col))
+  # extract start year
+  start_year = as.numeric(str_extract(start_year_col, "\\d+"))
   # get end year for this project
   if (project_id %in% end_years_df$project_no) {
     project_end_year = end_years_df %>%
@@ -96,7 +100,7 @@ for (file in acc_files) {
       
       # deforestation rate (using proportions)
       if (start_proportion > 0 && end_proportion > 0 && period_years > 0) {
-        acc_rate = (1 - (end_forest_pixels / start_forest_pixels)^(1 / period_years)) * 100
+        acc_rate = (1 - (end_forest_pixels / start_forest_pixels)^(1 / (period_years + 1))) * 100
       } else {
         acc_rate = NA_real_
       }
@@ -106,6 +110,8 @@ for (file in acc_files) {
       deforestation_list[[basename(file)]] = tibble(
         project_no = project_id,
         acc_rate = acc_rate,
+        start_year = start_year,
+        end_year = project_end_year,
         start_proportion = start_proportion,
         end_proportion = end_proportion,
         period_years = period_years,
