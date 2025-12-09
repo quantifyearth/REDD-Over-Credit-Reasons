@@ -20,11 +20,14 @@ pact_df = pact_control_df %>%
   left_join(pact_project_df, by = "project_no")
 
 # 2. read certified data
-certified_control_df = read_csv("csvs/certified_control_rates.csv") %>%
-  rename(certified_control_rate = rate)
-certified_project_df = read_csv("csvs/certified_project_rates.csv") %>%
-  rename(certified_project_rate = cert_rate) %>%
-  select(project_no, certified_project_rate)
+certified_control_df = read_csv("csvs/certified_rates.csv") %>%
+  select(`Project ID`, `Certified Control Deforestation Rate (%/year)`) %>%
+  rename(project_no = `Project ID`,
+         certified_control_rate = `Certified Control Deforestation Rate (%/year)`)
+certified_project_df = read_csv("csvs/certified_rates.csv") %>%
+  select(`Project ID`, `Certified Project Deforestation Rate (%/year)`) %>%
+  rename(project_no = `Project ID`,
+         certified_project_rate = `Certified Project Deforestation Rate (%/year)`)
 
 # 3. read acc certified control data (for additional measures)
 acc_certified_control_df = read_csv("csvs/acc_certified_control_rates.csv") %>%
