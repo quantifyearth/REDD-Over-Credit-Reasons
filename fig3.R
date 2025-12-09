@@ -173,32 +173,7 @@ cert_df = cert_df %>%
   left_join(eval_periods, by = "project_no")
 cert_df$compound = (1 - (cert_df$end / cert_df$start)^(1 / cert_df$period)) * 100
 cert_df = cert_df %>% rename(cert_rate = compound) 
-write_csv(cert_df, "csvs/certified_project_rates.csv")
 
-# ---- PREPARE FIG 5 CERTIFIED CONTROL RATE DATAFRAME ----
-# load the certified rates csv
-cert_control_df = read.csv("csvs/certified_avoided_amounts.csv") %>%
-  select(ID, Start, End, total.bsl.def) %>%
-  rename(project_no = ID,
-         start = Start,
-         end = End,
-         control_ha = total.bsl.def) %>%
-  # add the hectarage of project areas
-  left_join(geojson_df, by = "project_no") %>%
-  # add the proportion of undisturbed
-  left_join(undisturbed_df, by = "project_no") %>%
-  # work out the amount of undisturbed
-  mutate(area_undisturbed = area_ha * (undisturbed_percent / 100)) %>%
-  # remove na rows
-  drop_na()
-
-cert_control_df$period = cert_control_df$end - cert_control_df$start
-cert_control_df$end_ha = cert_control_df$area_undisturbed - cert_control_df$control_ha
-cert_control_df$control_rate = (1 - (cert_control_df$end_ha / cert_control_df$area_undisturbed)^(1 / cert_control_df$period)) * 100
-cert_control_df = cert_control_df %>%
-  select(project_no, control_rate) %>%
-  rename(rate = control_rate) %>%
-  write_csv("csvs/certified_control_rates.csv")
 # ---- SCATTER PLOT (FIGURE 3A) ----
 
 # join the deforestation rates and compute the difference
