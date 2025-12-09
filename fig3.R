@@ -19,6 +19,8 @@ for (file in acc_files) {
   df = read_parquet(file) %>% as_tibble()
   # compute the percentage of undisturbed forest at project start year
   percent_undisturbed = mean(df[[20]] %in% c(1,4), na.rm = TRUE) * 100
+  # print col name being used
+  print(paste("Processing file:", basename(file), "using column:", names(df)[20]))
   # extract the project id from the file name
   project_id = as.numeric(gsub("_k.parquet", "", basename(file)))
   # store the project id and undisturbed percentage in a tibble
@@ -55,7 +57,9 @@ for (file in acc_files) {
   # get start year from column 20
   start_year_col = names(df)[20]
   start_year = as.numeric(str_extract(start_year_col, "\\d+"))
-  print(paste("Processing project", project_id, "from", start_year_col))
+  print(paste("Processing project", project_id, "using years from", start_year_col))
+  # extract start year
+  start_year = as.numeric(str_extract(start_year_col, "\\d+"))
   # get end year for this project
   if (project_id %in% end_years_df$project_no) {
     project_end_year = end_years_df %>%
@@ -82,7 +86,7 @@ for (file in acc_files) {
         lost_1_to_other = sum(df[pixels_start_1, end_col, drop = TRUE] %in% c(2, 3, 4), na.rm = TRUE)
         print(paste("Project", project_id, "lost 1 to other pixels:", lost_1_to_other))
       }
-      
+      # 4s that became 3s
       lost_4_to_3 = 0
       if (start_4_pixels > 0) {
         # pixels that were 4 at start
@@ -92,8 +96,8 @@ for (file in acc_files) {
         print(paste("Project", project_id, "lost 4 to 3 pixels:", lost_4_to_3))
       }
       
+      
       total_lost_pixels = lost_1_to_other + lost_4_to_3
-      print(paste("Project", project_id, "total lost forest pixels:", total_lost_pixels))
       end_forest_pixels = start_forest_pixels - total_lost_pixels
       print(paste("Project", project_id, "end forest pixels:", end_forest_pixels))
       
@@ -117,13 +121,14 @@ for (file in acc_files) {
       deforestation_list[[basename(file)]] = tibble(
         project_no = project_id,
         acc_rate = acc_rate,
+        start_year = start_year,
+        end_year = project_end_year,
         start_proportion = start_proportion,
         end_proportion = end_proportion,
         period_years = period_years,
         start_forest_pixels = start_forest_pixels,
         end_forest_pixels = end_forest_pixels,
         lost_1_to_other = lost_1_to_other,
-        lost_4_to_3 = lost_4_to_3,
         total_lost_pixels = total_lost_pixels
       )
     }
@@ -163,7 +168,7 @@ cert_df = cert_df %>%
   ungroup() %>%
   drop_na()
 
-# compute the mean self-reported deforestation rates
+# compute the compound self-reported deforestation rates
 cert_df = cert_df %>%
   group_by(project_no) %>%
   arrange(year) %>%
@@ -172,11 +177,12 @@ cert_df = cert_df %>%
             area_ha = first(area_ha),
             undisturbed_percent = first(undisturbed_percent),.groups = "drop")
 cert_df$end = cert_df$start - cert_df$total
+
 # load eval periods csv
 eval_periods = read.csv("csvs/evaluation_periods.csv")
 cert_df = cert_df %>%
   left_join(eval_periods, by = "project_no")
-cert_df$compound = (1 - (cert_df$end / cert_df$start)^(1 / (cert_df$period))) * 100
+cert_df$compound = (1 - (cert_df$end / cert_df$start)^(1 / cert_df$period)) * 100
 cert_df = cert_df %>% rename(cert_rate = compound) 
 
 # ---- SCATTER PLOT (FIGURE 3A) ----
@@ -243,7 +249,7 @@ fig3b_plot = ggplot(plot_comparison_df, aes(x = variable, y = value, colour = va
         legend.position = "none")
 
 p_value = wilcox.test(comparison_df$acc_rate, comparison_df$cert_rate, paired = TRUE)$p.value
-p_label = paste("***")
+p_label = paste("**")
 
 # create the plot with significance annotation
 fig3b_plot = fig3b_plot + 
