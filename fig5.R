@@ -12,7 +12,8 @@ pact_control_df = read_csv("csvs/acc_pact_control_rates.csv") %>%
          project_no = project) %>%
   select(project_no, pact_control_rate)
 pact_project_df = read_csv("csvs/acc_pact_project_rates.csv") %>%
-  rename(pact_project_rate = acc_rate) %>%
+  rename(pact_project_rate = rate,
+         project_no = project) %>%
   select(project_no, pact_project_rate)
 
 # join pact control and project data
@@ -281,8 +282,5 @@ wilcox.test(comparison_df$certified_control_certified_project, comparison_df$pac
 wilcox.test(comparison_df$pact_control_certified_project, comparison_df$pact_control_pact_project, paired = T, alternative = "greater")
 wilcox.test(comparison_df$acc_certified_control_certified_project, comparison_df$pact_control_certified_project, paired = T, alternative = "greater")
 wilcox.test(comparison_df$certified_control_certified_project, comparison_df$acc_certified_control_certified_project, paired = T, alternative = "greater")
-
-
-
 
 
