@@ -342,7 +342,7 @@ calculate_transition_rates = function(parquet_folder,
     
     start_year = min(years)
     end_year = max(years)
-    n_years = end_year - start_year
+    n_years = end_year - start_year + 1
     
     # Get start and end column names
     start_col = paste0("luc_", start_year)
