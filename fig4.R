@@ -37,7 +37,7 @@ names(certified_control_df_list) = certified_control_paths %>%
 # extract project 958 for example
 certified_control_df = certified_control_df_list[["958"]]
 
-# determine the proportion of rows with 1 or 4 in luc_2001
+# determine the proportion of rows with 1 in luc_2001
 certified_control_df %>%
   summarise(proportion_undisturbed_2001 = mean(luc_2001 %in% c(1,4), na.rm = TRUE))
   
@@ -277,61 +277,195 @@ smd_plot = ggplot(smd_df, aes(x = smd, y = variable, colour = type)) +
 # ---- DEFORESTATION RATES ----
 calculate_transition_rates = function(parquet_folder,
                                       end_years_path = '',
-                                      pact = FALSE) {
+                                      mode = "all") {
+  # validate mode parameter
+  valid_modes = c("all", "pact_project", "pact_control", "certified")
+  if (!mode %in% valid_modes) {
+    stop("mode must be one of: 'all', 'pact_project', 'pact_control', 'certified'")
+  }
+  
+  message("starting transition rate calculation...")
+  message("mode: ", mode)
+  message("parquet folder: ", parquet_folder)
+  
   parquet_file_paths = list.files(parquet_folder, full.names = TRUE)
+  
+  if (length(parquet_file_paths) == 0) {
+    warning("no files found in folder: ", parquet_folder)
+    return(NULL)
+  }
+  
+  message("found ", length(parquet_file_paths), " files in folder")
+  
   df_list = lapply(parquet_file_paths, function(file_path) {
+    tryCatch({
+      message("reading file: ", basename(file_path))
       arrow::read_parquet(file_path) %>% as_tibble()
+    }, error = function(e) {
+      message("error reading: ", basename(file_path), " - ", e)
+      NULL
     })
+  })
   
   # name list elements by the file basename
   names(df_list) = basename(parquet_file_paths)
   # remove any files that could not be read
   df_list = df_list[!sapply(df_list, is.null)]
   
-  # Function to calculate transition rates for a single project
-  calculate_project_transitions = function(df_tbl, file_name, is_pact = FALSE, end_years_df = NULL) {
-    # Extract project number
+  if (length(df_list) == 0) {
+    warning("no files could be read successfully")
+    return(NULL)
+  }
+  
+  message("successfully read ", length(df_list), " files")
+  
+  # function to calculate transition rates for a single project
+  calculate_project_transitions = function(df_tbl, file_name, mode,
+                                           end_years_df = NULL) {
+    # extract project number
     proj_no = str_extract(file_name, "\\d+")
     
-    # Determine relevant columns based on file type
-    if (is_pact) {
-      # For pact files (controls), use s_ columns
+    message("\nprocessing project: ", proj_no, " (file: ", file_name, ")")
+    
+    # determine how to process based on mode
+    original_cols = names(df_tbl)
+    message("original columns: ", paste(head(original_cols), collapse = ", "), 
+            ifelse(length(original_cols) > 6, " ...", ""))
+    
+    if (mode == "pact_project") {
+      message("processing as pact project area...")
+      # check if this file has k_ columns
+      if (!any(grepl("^k_", names(df_tbl)))) {
+        message("file does not have k_ columns, skipping (might be a control file)")
+        return(NULL)
+      }
+      
+      # for pact project areas, use k_ columns
+      df_tbl = df_tbl %>%
+        select(starts_with("k_")) %>%
+        rename_with(~ str_remove(., "k_"))
+      
+      message("after selecting k_ columns: ", ncol(df_tbl), " columns")
+      
+      # select luc columns and remove first 9 if they exist
+      df_tbl = df_tbl %>% 
+        select(starts_with("luc"))
+      
+      message("after selecting luc columns: ", ncol(df_tbl), " columns")
+      
+      if(ncol(df_tbl) > 9){
+        message("removing first 9 columns (dates)...")
+        df_tbl = df_tbl %>% select(-c(1:9))
+        message("after removing date columns: ", ncol(df_tbl), " columns")
+      }
+      is_pact = TRUE
+      
+    } else if (mode == "pact_control") {
+      message("processing as pact control area...")
+      # check if this file has s_ columns
+      if (!any(grepl("^s_", names(df_tbl)))) {
+        message("file does not have s_ columns, skipping (might be a project file)")
+        return(NULL)
+      }
+      
+      # for pact control areas, use s_ columns
       df_tbl = df_tbl %>%
         select(starts_with("s_")) %>%
         rename_with(~ str_remove(., "s_"))
-      # Select luc columns and remove first 9 if they exist
+      
+      message("after selecting s_ columns: ", ncol(df_tbl), " columns")
+      
+      # select luc columns and remove first 9 if they exist
       df_tbl = df_tbl %>% 
         select(starts_with("luc"))
+      
+      message("after selecting luc columns: ", ncol(df_tbl), " columns")
+      
       if(ncol(df_tbl) > 9){
+        message("removing first 9 columns (dates)...")
         df_tbl = df_tbl %>% select(-c(1:9))
+        message("after removing date columns: ", ncol(df_tbl), " columns")
       }
-    } else {
-      # For certified control, just select luc columns
+      is_pact = TRUE
+      
+    } else if (mode == "certified") {
+      message("processing as certified control...")
+      # check if this is actually a certified file (should not have k_ or s_ columns)
+      if (any(grepl("^k_", names(df_tbl))) || any(grepl("^s_", names(df_tbl)))) {
+        message("file has k_ or s_ columns, skipping (might be a pact file)")
+        return(NULL)
+      }
+      
+      # for certified control, just select luc columns
       df_tbl = df_tbl %>% select(starts_with("luc"))
+      message("after selecting luc columns: ", ncol(df_tbl), " columns")
+      is_pact = FALSE
+      
+    } else {
+      # default mode - auto-detect based on column names
+      message("auto-detecting file type based on columns...")
+      if (any(grepl("^k_", names(df_tbl)))) {
+        message("detected as pact project (has k_ columns)")
+        df_tbl = df_tbl %>%
+          select(starts_with("k_")) %>%
+          rename_with(~ str_remove(., "k_"))
+        df_tbl = df_tbl %>% 
+          select(starts_with("luc"))
+        if(ncol(df_tbl) > 9){
+          df_tbl = df_tbl %>% select(-c(1:9))
+        }
+        is_pact = TRUE
+        mode_label = "pact_project"
+        
+      } else if (any(grepl("^s_", names(df_tbl)))) {
+        message("detected as pact control (has s_ columns)")
+        df_tbl = df_tbl %>%
+          select(starts_with("s_")) %>%
+          rename_with(~ str_remove(., "s_"))
+        df_tbl = df_tbl %>% 
+          select(starts_with("luc"))
+        if(ncol(df_tbl) > 9){
+          df_tbl = df_tbl %>% select(-c(1:9))
+        }
+        is_pact = TRUE
+        mode_label = "pact_control"
+        
+      } else {
+        message("detected as certified control (no k_ or s_ columns)")
+        df_tbl = df_tbl %>% select(starts_with("luc"))
+        is_pact = FALSE
+        mode_label = "certified"
+      }
     }
     
-    # Determine start and end years
-    # Get all year columns
+    # determine start and end years
+    # all year columns
     year_cols = names(df_tbl)
     years = as.numeric(str_extract(year_cols, "\\d+"))
     
-    # No special "project" handling anymore; use the same approach for all files
+    message("years found: ", paste(sort(years), collapse = ", "))
+    
     if (is_pact && !is.null(end_years_df)) {
+      message("checking for end year in pact projects...")
       if (proj_no %in% as.character(end_years_df$project_no)) {
         end_year = end_years_df %>%
           filter(project_no == proj_no) %>%
           pull(end_year) %>%
           as.numeric()
-        # Filter to include only years <= end_year
+        message("using specified end year: ", end_year)
+        # filter to include only years <= end_year
         keep_cols = year_cols[years <= end_year]
         df_tbl = df_tbl %>% select(all_of(keep_cols))
         years = years[years <= end_year]
+        message("filtered years: ", paste(sort(years), collapse = ", "))
       } else {
+        message("project ", proj_no, " not found in end_years file")
         return(NULL)
       }
     }
     
     if (length(years) < 2) {
+      message("error: need at least 2 years of data, found: ", length(years))
       return(NULL)
     }
     
@@ -339,49 +473,67 @@ calculate_transition_rates = function(parquet_folder,
     end_year = max(years)
     n_years = end_year - start_year + 1
     
-    # Get start and end column names
+    message("analysis period: ", start_year, " to ", end_year, " (", n_years, " years)")
+    
+    # get start and end column names
     start_col = paste0("luc_", start_year)
     end_col = paste0("luc_", end_year)
     
     if (!(start_col %in% names(df_tbl)) || !(end_col %in% names(df_tbl))) {
+      message("error: start or end column not found: ", start_col, " / ", end_col)
       return(NULL)
     }
     
-    # For all files, use simpler approach
-    # Find pixels that were forest (1) at start
+    # for all files, use simpler approach
+    # find pixels that were forest (1, 4) at start
     forest_start_indices = which(df_tbl[[start_col]] %in% c(1, 4))
     forest_start_count = length(forest_start_indices)
     
-    # Count lost pixels
+    message("forest pixels at start (", start_year, "): ", forest_start_count)
+    
+    # count lost pixels
     lost_pixels = 0
-    loss_1_to_others = 0
-    loss_4_to_3 = 0
-    
-    
+    ref_lost_pixels = 0
     if (forest_start_count > 0) {
+      message("checking ", forest_start_count, " forest pixels for loss...")
       for (idx in forest_start_indices) {
         start_class = df_tbl[[start_col]][idx]
         end_class = df_tbl[[end_col]][idx]
         
         if (start_class == 1 && end_class %in% c(2, 3, 4)) {
-          loss_1_to_others = loss_1_to_others + 1
           lost_pixels = lost_pixels + 1
-        } else if (start_class == 4 && end_class %in% c(3)) {
-          loss_4_to_3 = loss_4_to_3 + 1
+        } else if (start_class == 4 && end_class == 3) {
+          # treat NA as loss
           lost_pixels = lost_pixels + 1
+          ref_lost_pixels = ref_lost_pixels + 1
+        }
       }
-    }
     }
     
     forest_end_pixels = forest_start_count - lost_pixels
     
-    # Calculate rate
+    message("forest pixels at end (", end_year, "): ", forest_end_pixels)
+    message("lost pixels: ", lost_pixels)
+    message("reforested lost pixels (4 to 3): ", ref_lost_pixels)
+    
+    # calculate rate
     if (forest_start_count > 0 && forest_end_pixels > 0 && n_years > 0) {
       acc_rate = (1 - (forest_end_pixels / forest_start_count)^(1 / n_years)) * 100
+      message("calculated annual change rate: ", round(acc_rate, 3), "%")
     } else if (forest_start_count > 0 && forest_end_pixels == 0) {
       acc_rate = 100
+      message("all forest lost: rate = 100%")
     } else {
       acc_rate = NA_real_
+      message("could not calculate rate (insufficient data)")
+    }
+    
+    # add mode to result for identification
+    if (mode == "all") {
+      # use the mode_label determined during auto-detection
+      mode_to_use = mode_label
+    } else {
+      mode_to_use = mode
     }
     
     result = tibble(
@@ -393,63 +545,114 @@ calculate_transition_rates = function(parquet_folder,
       forest_start_pixels = forest_start_count,
       forest_end_pixels = forest_end_pixels,
       lost_pixels = lost_pixels,
-      loss_1_to_others = loss_1_to_others,
-      loss_4_to_3 = loss_4_to_3,
-      acc_deforestation_rate = acc_rate
+      reforested_lost_pixels = ref_lost_pixels,
+      acc_deforestation_rate = acc_rate,
+      mode = mode_to_use
     )
+    
+    message("result for project ", proj_no, ":")
+    message("  - rate: ", round(acc_rate, 3), "%")
+    message("  - period: ", start_year, "-", end_year)
+    message("  - start forest: ", forest_start_count)
+    message("  - end forest: ", forest_end_pixels)
     
     return(result)
   }
   
-  # Read end years if needed for pact files
-  if (pact) {
-    end_years_df = read.csv(end_years_path, stringsAsFactors = FALSE)
+  # read end years if needed for pact files
+  # for pact modes, read end years file
+  if (mode %in% c("all", "pact_project", "pact_control")) {
+    if (file.exists(end_years_path) && end_years_path != "") {
+      message("reading end years file: ", end_years_path)
+      end_years_df = read.csv(end_years_path, stringsAsFactors = FALSE)
+      message("loaded ", nrow(end_years_df), " project end years")
+    } else {
+      end_years_df = NULL
+      message("no end years file provided for pact analysis")
+    }
   } else {
     end_years_df = NULL
   }
   
-  # Apply function to all projects
-  transitions_list = mapply(
-    calculate_project_transitions,
-    df_list,
-    names(df_list),
-    MoreArgs = list(
-      is_pact = pact,
+  # apply function to all projects
+  message("\nprocessing ", length(df_list), " projects...")
+  transitions_list = lapply(names(df_list), function(file_name) {
+    message("\n--- processing file: ", file_name, " ---")
+    result = calculate_project_transitions(
+      df_list[[file_name]],
+      file_name,
+      mode = mode,
       end_years_df = end_years_df
-    ),
-    SIMPLIFY = FALSE
-  )
+    )
+    if (!is.null(result)) {
+      message("✓ completed successfully")
+    } else {
+      message("✗ failed to process")
+    }
+    result
+  })
   
-  # Remove NULL results
+  # remove null results
+  valid_results = sum(!sapply(transitions_list, is.null))
   transitions_list = transitions_list[!sapply(transitions_list, is.null)]
   
-  # Combine all results
+  message("\nsuccessfully processed ", valid_results, " out of ", length(df_list), " files")
+  
+  if (length(transitions_list) == 0) {
+    warning("no projects could be processed successfully")
+    return(NULL)
+  }
+  
+  # combine all results
   combined_transitions_tbl = bind_rows(transitions_list)
+  
+  message("\nfinal summary:")
+  message("total projects processed: ", nrow(combined_transitions_tbl))
+  message("average rate: ", round(mean(combined_transitions_tbl$acc_deforestation_rate, na.rm = TRUE), 3), "%")
+  message("range of rates: ", round(min(combined_transitions_tbl$acc_deforestation_rate, na.rm = TRUE), 3), "% to ", 
+          round(max(combined_transitions_tbl$acc_deforestation_rate, na.rm = TRUE), 3), "%")
   
   return(combined_transitions_tbl)
 }
+
 # ---- JOIN CERTIFIED AND ACC DEFORESTATION RATES ----
 
-certified_df = calculate_transition_rates("parquets/acc_certified_control_parquets") %>%
-  # save as csv
-  rename(rate = acc_deforestation_rate) %>%
-  write_csv("csvs/acc_certified_control_rates.csv") %>%
-  rename(certified_rate = rate) %>%
-  select(project, certified_rate)
+certified_df = calculate_transition_rates("parquets/acc_certified_control_parquets",
+                                          "",
+                                          "certified") 
 
-pact_df = calculate_transition_rates("parquets/acc_pact_matching_parquets",
+certified_df %>%
+  select(project, acc_deforestation_rate) %>%
+  rename(rate = acc_deforestation_rate) %>%
+  write.csv("csvs/acc_certified_control_rates.csv")
+
+pact_control_df = calculate_transition_rates("parquets/acc_pact_matching_parquets",
                              "csvs/evaluation_end_years.csv",
-                             TRUE) %>%
+                             "pact_control")
+
+pact_control_df %>%
+  select(project, acc_deforestation_rate) %>%
   rename(rate = acc_deforestation_rate) %>%
-  write_csv("csvs/acc_pact_control_rates.csv") %>%
-  rename(acc_rate = rate) %>%
-  select(project, acc_rate)
+  write.csv("csvs/acc_pact_control_rates.csv")
 
+pact_project_df = calculate_transition_rates("parquets/acc_pact_matching_parquets",
+                             "csvs/evaluation_end_years.csv",
+                             "pact_project")
+pact_project_df %>%
+  select(project, acc_deforestation_rate) %>%
+  rename(rate = acc_deforestation_rate) %>%
+  write.csv("csvs/acc_pact_project_rates.csv")
 
-control_areas_df = left_join(certified_df, pact_df,
-                             by = "project") %>%
-  rename(project_no = project,
-         qem_rate = acc_rate)
+control_areas_df = certified_df %>%
+  select(project, acc_deforestation_rate) %>%
+  rename(certified_rate = acc_deforestation_rate)
+
+control_areas_df = control_areas_df %>%
+  left_join(pact_control_df %>% select(project, acc_deforestation_rate) %>%
+              rename(qem_rate = acc_deforestation_rate), by = "project")
+             
+control_areas_df = control_areas_df %>%
+  rename(project_no = project)
 
 # ---- RESHAPE DATA FOR PLOTTING ----
 plot_control_areas_df = control_areas_df %>% 
