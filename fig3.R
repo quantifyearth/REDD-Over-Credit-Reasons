@@ -238,7 +238,7 @@ fig3b_plot = ggplot(plot_comparison_df, aes(x = variable, y = value, colour = va
         legend.position = "none")
 
 p_value = wilcox.test(comparison_df$acc_rate, comparison_df$cert_rate, paired = TRUE)$p.value
-p_label = paste("***")
+p_label = paste("**")
 
 # create the plot with significance annotation
 fig3b_plot = fig3b_plot + 
