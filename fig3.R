@@ -107,7 +107,7 @@ for (file in acc_files) {
       
       # deforestation rate (using proportions)
       if (start_proportion > 0 && end_proportion > 0 && period_years > 0) {
-        acc_rate = (1 - (end_forest_pixels / start_forest_pixels)^(1 / (period_years + 1)) * 100
+        acc_rate = (1 - (end_forest_pixels / start_forest_pixels)^(1 / (period_years + 1))) * 100
       } else {
         acc_rate = NA_real_
       }
